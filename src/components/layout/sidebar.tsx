@@ -42,25 +42,6 @@ function LogoMark() {
   );
 }
 
-interface StatBoxProps {
-  value: number | string;
-  label: string;
-  color: string;
-  compact?: boolean;
-}
-
-function StatBox({ value, label, color, compact = false }: StatBoxProps) {
-  return (
-    <div className="rounded-xl bg-white/3 px-3 py-2.5">
-      <p className={`font-bold ${color} ${compact ? "text-sm" : "text-xl"}`}>
-        {value}
-      </p>
-      <p className="mt-0.5 text-[11px] leading-tight text-slate-500">
-        {label}
-      </p>
-    </div>
-  );
-}
 
 export default function Sidebar({
   active = "Dashboard",
