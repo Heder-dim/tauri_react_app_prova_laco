@@ -1,22 +1,38 @@
-import { useState } from "react";
-import Sidebar, { type SidebarProps } from "./components/layout/sidebar";
+import { HashRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
+import Sidebar from "./components/layout/sidebar";
+import { ROUTE_BY_LABEL, labelForPath, type MenuLabel } from "./routes/menu-routes";
 
-type MenuLabel = NonNullable<SidebarProps["active"]>;
+import DashboardPage from "./pages/dashboardpage";
 
-export default function App() {
-  const [page, setPage] = useState<MenuLabel>("Dashboard");
+
+function Layout() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const activeLabel = labelForPath(location.pathname);
+
+  function handleNavigate(label: MenuLabel) {
+    navigate(ROUTE_BY_LABEL[label]);
+  }
 
   return (
     <div className="min-h-screen bg-white">
-      <Sidebar active={page} onNavigate={setPage} />
+      <Sidebar active={activeLabel} onNavigate={handleNavigate} />
 
       {/* Área de conteúdo: recuada em desktop (largura da sidebar = w-72 = 18rem) */}
       <main className="p-6 lg:ml-72 lg:p-10">
-        <h1 className="text-2xl font-bold text-[#070c14]">{page}</h1>
-        <p className="mt-2 text-slate-400">
-          Conteúdo da página "{page}" entra aqui.
-        </p>
+        <Routes>
+          <Route path="/" element={<DashboardPage />} />
+        </Routes>
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <HashRouter>
+      <Layout />
+    </HashRouter>
   );
 }

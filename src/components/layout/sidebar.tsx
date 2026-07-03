@@ -44,14 +44,17 @@ function LogoMark() {
   );
 }
 
-
 export default function Sidebar({
   active = "Dashboard",
   onNavigate = () => {},
 }: SidebarProps) {
   const [open, setOpen] = useState(false);
 
-  function handleSelect(label: MenuLabel) {
+  // Quando "Provas" está ativo, o Menu Principal fica bloqueado
+  const isProvasActive = active === "Provas";
+
+  function handleSelect(label: MenuLabel, disabled = false) {
+    if (disabled) return;
     onNavigate(label);
     setOpen(false);
   }
@@ -116,7 +119,6 @@ export default function Sidebar({
         <div className="mx-6 border-t border-white/5" />
 
         {/* Navegação */}
-        
         <nav className="mt-6 flex-1 overflow-y-auto px-4">
           <ul className="space-y-1.5">
             {FIRST_MENU_ITEMS.map(({ label, icon: Icon }) => {
@@ -139,31 +141,40 @@ export default function Sidebar({
               );
             })}
           </ul>
-           <p className="mt-3 mb-2 px-3 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+
+          <p className="mt-3 mb-2 px-3 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
             Menu principal
           </p>
-          <ul className="space-y-1.5">
+          <ul
+            className={`space-y-1.5 transition-opacity ${
+              isProvasActive ? "opacity-40" : "opacity-100"
+            }`}
+          >
             {MENU_ITEMS.map(({ label, icon: Icon }) => {
               const isActive = label === active;
               return (
                 <li key={label}>
                   <button
-                    onClick={() => handleSelect(label)}
-                    className={`flex w-full items-center gap-3 cursor-pointer rounded-xl px-3 py-2.5 text-left text-sm transition-colors
+                    onClick={() => handleSelect(label, isProvasActive)}
+                    disabled={isProvasActive}
+                    aria-disabled={isProvasActive}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors
                       ${
-                        isActive
-                          ? "bg-linear-to-r from-blue-600 to-blue-500 font-semibold text-white shadow-lg shadow-blue-950/40"
-                          : "font-medium text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                        isProvasActive
+                          ? "cursor-not-allowed text-slate-500"
+                          : isActive
+                          ? "cursor-pointer bg-linear-to-r from-blue-600 to-blue-500 font-semibold text-white shadow-lg shadow-blue-950/40"
+                          : "cursor-pointer font-medium text-slate-400 hover:bg-white/5 hover:text-slate-200"
                       }`}
                   >
-                    <Icon size={18} strokeWidth={isActive ? 2.4 : 2} />
+                    <Icon size={18} strokeWidth={isActive && !isProvasActive ? 2.4 : 2} />
                     {label}
                   </button>
                 </li>
               );
             })}
           </ul>
-        </nav> 
+        </nav>
       </aside>
     </>
   );
