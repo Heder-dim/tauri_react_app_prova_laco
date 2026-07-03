@@ -9,13 +9,15 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { label: "Provas", icon: LayoutGrid },
   { label: "Dashboard", icon: LayoutGrid },
   { label: "Cabeceiros", icon: Users },
   { label: "Pezeiros", icon: User },
   { label: "Duplas e Resultados", icon: Trophy },
 ];
 
+const FIRST_MENU_ITEMS: MenuItem[] = [
+  { label: "Provas", icon: LayoutGrid },
+];
 
 export interface SidebarProps {
   active?: MenuLabel;
@@ -114,8 +116,30 @@ export default function Sidebar({
         <div className="mx-6 border-t border-white/5" />
 
         {/* Navegação */}
+        
         <nav className="mt-6 flex-1 overflow-y-auto px-4">
-          <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+          <ul className="space-y-1.5">
+            {FIRST_MENU_ITEMS.map(({ label, icon: Icon }) => {
+              const isActive = label === active;
+              return (
+                <li key={label}>
+                  <button
+                    onClick={() => handleSelect(label)}
+                    className={`flex w-full items-center gap-3 cursor-pointer rounded-xl px-3 py-2.5 text-left text-sm transition-colors
+                      ${
+                        isActive
+                          ? "bg-linear-to-r from-blue-600 to-blue-500 font-semibold text-white shadow-lg shadow-blue-950/40"
+                          : "font-medium text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                      }`}
+                  >
+                    <Icon size={18} strokeWidth={isActive ? 2.4 : 2} />
+                    {label}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+           <p className="mt-3 mb-2 px-3 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
             Menu principal
           </p>
           <ul className="space-y-1.5">
