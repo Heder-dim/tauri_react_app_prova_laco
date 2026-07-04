@@ -91,7 +91,7 @@ export default function Sidebar({
 
       {/* Sidebar — fixa em desktop, drawer deslizante em mobile */}
       <aside
-        className={`fixed left-0 top-0 z-50 flex h-screen w-72 shrink-0 flex-col
+        className={`fixed left-0 top-0 z-50 flex h-screen w-58 shrink-0 flex-col
           bg-[#0b1220] transition-transform duration-300 ease-in-out
           ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
       >

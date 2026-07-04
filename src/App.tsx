@@ -19,8 +19,8 @@ function Layout() {
     <div className="min-h-screen bg-white">
       <Sidebar active={activeLabel} onNavigate={handleNavigate} />
 
-      {/* Área de conteúdo: recuada em desktop (largura da sidebar = w-72 = 18rem) */}
-      <main className="p-6 lg:ml-72 lg:p-10">
+      {/* Área de conteúdo: recuada em desktop (largura da sidebar = w-60 = 15rem) */}
+      <main className="p-6 lg:ml-58 lg:p-10">
         <Routes>
           <Route path="/" element={<DashboardPage />} />
         </Routes>
