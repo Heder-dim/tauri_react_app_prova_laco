@@ -13,7 +13,7 @@ export interface DuplaRow {
   tempos: (number | null)[];
   /** Calculado automaticamente a partir de `tempos` (soma) */
   parcial: number;
-  /** Editável — inicialmente calculado a partir de `tempos` (último tempo preenchido), mas pode ser sobrescrito manualmente */
+  /** Editável — campo independente, não é mais calculado a partir de `tempos` */
   boiFinal: number;
   /** Calculado automaticamente a partir de `tempos` */
   media: number;
@@ -43,22 +43,17 @@ function parseTempoInput(raw: string): number | null {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-/** Recalcula Parcial, Média e Boi Final (auto) a partir dos tempos da dupla */
-function recalcularDeTempos(dupla: DuplaRow): DuplaRow {
+/** Recalcula Parcial (soma dos tempos 1-5) e Média (tempos 1-5 + Boi Final) */
+function recalcularParcialEMedia(dupla: DuplaRow): DuplaRow {
   const temposValidos = dupla.tempos.filter((t): t is number => t !== null);
 
   const parcial = temposValidos.reduce((soma, t) => soma + t, 0);
-  const media = temposValidos.length > 0 ? parcial / temposValidos.length : 0;
 
-  let boiFinal = 0;
-  for (let i = dupla.tempos.length - 1; i >= 0; i--) {
-    if (dupla.tempos[i] !== null) {
-      boiFinal = dupla.tempos[i] as number;
-      break;
-    }
-  }
+  const valoresParaMedia = [...temposValidos, dupla.boiFinal];
+  const media =
+    valoresParaMedia.reduce((soma, t) => soma + t, 0) / valoresParaMedia.length;
 
-  return { ...dupla, parcial, media, boiFinal };
+  return { ...dupla, parcial, media };
 }
 
 export default function DuplasTable({
@@ -70,7 +65,13 @@ export default function DuplasTable({
 }: DuplasTableProps) {
   const [duplas, setDuplas] = useState<DuplaRow[]>(duplasIniciais);
 
+  // Guarda o texto exatamente como foi digitado em cada campo (chave: "tempo-<duplaIndex>-<tempoIndex>" ou "boiFinal-<duplaIndex>"),
+  // pra não perder a vírgula/ponto ao reformatar o número a cada tecla.
+  const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
+
   function handleTempoChange(duplaIndex: number, tempoIndex: number, rawValue: string) {
+    setRawInputs((prev) => ({ ...prev, [`tempo-${duplaIndex}-${tempoIndex}`]: rawValue }));
+
     setDuplas((prev) => {
       const atualizado = prev.map((dupla, i) => {
         if (i !== duplaIndex) return dupla;
@@ -78,8 +79,8 @@ export default function DuplasTable({
         const novosTempos = [...dupla.tempos];
         novosTempos[tempoIndex] = parseTempoInput(rawValue);
 
-        // Editar um tempo recalcula Parcial, Média e Boi Final automaticamente
-        return recalcularDeTempos({ ...dupla, tempos: novosTempos });
+        // Editar um tempo recalcula Parcial (tempos 1-5) e Média (tempos 1-5 + Boi Final)
+        return recalcularParcialEMedia({ ...dupla, tempos: novosTempos });
       });
 
       onDuplasChange?.(atualizado);
@@ -87,17 +88,33 @@ export default function DuplasTable({
     });
   }
 
-  /** Edição manual do Boi Final — sobrescreve o valor calculado, sem mexer em Parcial/Média */
+  /** Edição do Boi Final — campo independente dos tempos, mas entra no cálculo da Média */
   function handleBoiFinalChange(duplaIndex: number, rawValue: string) {
+    setRawInputs((prev) => ({ ...prev, [`boiFinal-${duplaIndex}`]: rawValue }));
+
     setDuplas((prev) => {
       const atualizado = prev.map((dupla, i) => {
         if (i !== duplaIndex) return dupla;
-        return { ...dupla, boiFinal: parseTempoInput(rawValue) ?? 0 };
+        const novoBoiFinal = parseTempoInput(rawValue) ?? 0;
+        return recalcularParcialEMedia({ ...dupla, boiFinal: novoBoiFinal });
       });
 
       onDuplasChange?.(atualizado);
       return atualizado;
     });
+  }
+
+  /** Valor mostrado no input: prioriza o texto bruto digitado; cai pro valor formatado quando ainda não foi mexido */
+  function tempoInputValue(duplaIndex: number, tempoIndex: number, tempo: number | null) {
+    const raw = rawInputs[`tempo-${duplaIndex}-${tempoIndex}`];
+    if (raw !== undefined) return raw;
+    return tempo !== null ? tempo.toString().replace(".", ",") : "";
+  }
+
+  function boiFinalInputValue(duplaIndex: number, boiFinal: number) {
+    const raw = rawInputs[`boiFinal-${duplaIndex}`];
+    if (raw !== undefined) return raw;
+    return boiFinal.toString().replace(".", ",");
   }
 
   return (
@@ -209,24 +226,32 @@ export default function DuplasTable({
                 </td>
                 <td className="px-2 py-3 text-slate-700">{dupla.bois}</td>
 
-                {/* Tempos editáveis */}
-                {dupla.tempos.map((tempo, tempoIndex) => (
-                  <td key={tempoIndex} className="box-border px-1 py-2 text-center">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={tempo !== null ? tempo.toString().replace(".", ",") : ""}
-                      placeholder="–"
-                      aria-label={`Tempo do ${tempoIndex + 1}º boi — ${dupla.pezeiroNome}`}
-                      onChange={(e) => handleTempoChange(duplaIndex, tempoIndex, e.target.value)}
-                      className={`box-border w-full rounded-md border border-transparent bg-transparent px-1.5 py-1 text-center outline-none transition-colors placeholder:text-slate-300 hover:bg-slate-50 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 ${
-                        tempoIndex === 1 && tempo !== null
-                          ? "font-semibold text-green-600"
-                          : "text-slate-700"
-                      }`}
-                    />
-                  </td>
-                ))}
+                {/* Tempos editáveis — só habilitados até a quantidade de bois da dupla */}
+                {dupla.tempos.map((tempo, tempoIndex) => {
+                  const habilitado = tempoIndex < dupla.bois;
+                  return (
+                    <td key={tempoIndex} className="box-border px-1 py-2 text-center">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={tempoInputValue(duplaIndex, tempoIndex, tempo)}
+                        placeholder="–"
+                        disabled={!habilitado}
+                        aria-label={`Tempo do ${tempoIndex + 1}º boi — ${dupla.pezeiroNome}`}
+                        onChange={(e) => handleTempoChange(duplaIndex, tempoIndex, e.target.value)}
+                        className={`box-border w-full rounded-md border border-transparent bg-transparent px-1.5 py-1 text-center outline-none transition-colors placeholder:text-slate-300 ${
+                          habilitado
+                            ? "hover:bg-slate-50 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                            : "cursor-not-allowed opacity-40"
+                        } ${
+                          tempoIndex === 1 && tempo !== null
+                            ? "font-semibold text-green-600"
+                            : "text-slate-700"
+                        }`}
+                      />
+                    </td>
+                  );
+                })}
 
                 <td className="px-2 py-3 text-slate-700">
                   {formatTempo(dupla.parcial)}
@@ -237,7 +262,7 @@ export default function DuplasTable({
                   <input
                     type="text"
                     inputMode="decimal"
-                    value={dupla.boiFinal.toString().replace(".", ",")}
+                    value={boiFinalInputValue(duplaIndex, dupla.boiFinal)}
                     aria-label={`Boi Final — ${dupla.pezeiroNome}`}
                     onChange={(e) => handleBoiFinalChange(duplaIndex, e.target.value)}
                     className="box-border w-full rounded-md border border-transparent bg-green-50 px-1.5 py-1 text-center font-semibold text-green-600 outline-none transition-colors hover:bg-green-100 focus:border-green-300 focus:bg-white focus:ring-2 focus:ring-green-100"

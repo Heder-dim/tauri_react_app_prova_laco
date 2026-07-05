@@ -3,7 +3,7 @@ import PageHeader from "../components/layout/page-header";
 import StepBadge from "../components/ui/step-badge";
 import StatBox from "../components/ui/stat-box";
 import DuplasTable, { type DuplaRow } from "../components/dashboard/duplas-table";
-import RegraBoisPanel from "../components/dashboard/regra-bois-panel";
+// import RegraBoisPanel from "../components/dashboard/regra-bois-panel";
 
 // Dados de exemplo — substituir pela consulta real (SQLite) quando a lógica for implementada
 const DUPLAS_EXEMPLO: DuplaRow[] = [
