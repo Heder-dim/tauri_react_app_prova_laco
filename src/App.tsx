@@ -1,45 +1,44 @@
-import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { HashRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
+import Sidebar from "./components/layout/sidebar";
+import { ROUTE_BY_LABEL, labelForPath, type MenuLabel } from "./routes/menu-routes";
 
-function App() {
-  const [mensagem, setMensagem] = useState("");
+import DashboardPage from "./pages/DashboardPage";
+import CabeceirosPage from "./pages/CabeceirosPage";
+import PezeirosPage from "./pages/PezeirosPage";
+import DuplasResultadosPage from "./pages/DuplasResultadosPage";
 
-  async function chamarRust() {
-    try {
-      const resposta = await invoke<string>("greet", {
-        name: "Heder",
-      });
 
-      setMensagem(resposta);
-    } catch (error) {
-      console.error("Erro ao chamar o Rust:", error);
-      setMensagem("Não foi possível executar o comando.");
-    }
+function Layout() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const activeLabel = labelForPath(location.pathname);
+
+  function handleNavigate(label: MenuLabel) {
+    navigate(ROUTE_BY_LABEL[label]);
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold">
-          Tauri + React + Tailwind
-        </h1>
+    <div className="min-h-screen bg-white">
+      <Sidebar active={activeLabel} onNavigate={handleNavigate} />
 
-        <button
-          type="button"
-          onClick={chamarRust}
-          className="mt-6 rounded-lg bg-blue-600 px-5 py-3 hover:bg-blue-500"
-        >
-          Chamar Rust
-        </button>
-
-        {mensagem && (
-          <p className="mt-4 text-slate-300">
-            {mensagem}
-          </p>
-        )}
-      </div>
-    </main>
+      {/* Área de conteúdo: recuada em desktop (largura da sidebar = w-60 = 15rem) */}
+      <main className="p-6 lg:ml-58 lg:p-10">
+        <Routes>
+          <Route path="/" element={<DuplasResultadosPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/cabeceiros" element={<CabeceirosPage />} />
+          <Route path="/pezeiros" element={<PezeirosPage />} />
+        </Routes>
+      </main>
+    </div>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <HashRouter>
+      <Layout />
+    </HashRouter>
+  );
+}
