@@ -5,6 +5,7 @@ import { ROUTE_BY_LABEL, labelForPath, type MenuLabel } from "./routes/menu-rout
 import DashboardPage from "./pages/DashboardPage";
 import CabeceirosPage from "./pages/CabeceirosPage";
 import PezeirosPage from "./pages/PezeirosPage";
+import DuplasResultadosPage from "./pages/DuplasResultadosPage";
 
 
 function Layout() {
@@ -24,7 +25,7 @@ function Layout() {
       {/* Área de conteúdo: recuada em desktop (largura da sidebar = w-60 = 15rem) */}
       <main className="p-6 lg:ml-58 lg:p-10">
         <Routes>
-          <Route path="/" element={<DashboardPage />} />
+          <Route path="/" element={<DuplasResultadosPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/cabeceiros" element={<CabeceirosPage />} />
           <Route path="/pezeiros" element={<PezeirosPage />} />

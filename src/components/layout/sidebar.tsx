@@ -9,10 +9,10 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { label: "Dashboard", icon: LayoutGrid },
+  { label: "Duplas e Resultados", icon: Trophy },
   { label: "Cabeceiros", icon: Users },
   { label: "Pezeiros", icon: User },
-  { label: "Duplas e Resultados", icon: Trophy },
+  { label: "Dashboard", icon: LayoutGrid },
 ];
 
 const FIRST_MENU_ITEMS: MenuItem[] = [

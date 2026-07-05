@@ -5,10 +5,10 @@ export type MenuLabel = NonNullable<SidebarProps["active"]>;
 /** Caminho de rota para cada item do menu */
 export const ROUTE_BY_LABEL: Record<MenuLabel, string> = {
   Provas: "/provas",
-  Dashboard: "/",
+  Dashboard: "/dashboard",
   Cabeceiros: "/cabeceiros",
   Pezeiros: "/pezeiros",
-  "Duplas e Resultados": "/duplas-resultados",
+  "Duplas e Resultados": "/",
 };
 
 /** Caminho -> label (usado para destacar o item ativo na sidebar) */
