@@ -4,6 +4,7 @@ import { ROUTE_BY_LABEL, labelForPath, type MenuLabel } from "./routes/menu-rout
 
 import DashboardPage from "./pages/DashboardPage";
 import CabeceirosPage from "./pages/CabeceirosPage";
+import PezeirosPage from "./pages/PezeirosPage";
 
 
 function Layout() {
@@ -26,6 +27,7 @@ function Layout() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/cabeceiros" element={<CabeceirosPage />} />
+          <Route path="/pezeiros" element={<PezeirosPage />} />
         </Routes>
       </main>
     </div>
