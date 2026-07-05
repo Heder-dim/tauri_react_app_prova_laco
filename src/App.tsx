@@ -2,7 +2,8 @@ import { HashRouter, Routes, Route, useNavigate, useLocation } from "react-route
 import Sidebar from "./components/layout/sidebar";
 import { ROUTE_BY_LABEL, labelForPath, type MenuLabel } from "./routes/menu-routes";
 
-import DashboardPage from "./pages/dashboardpage";
+import DashboardPage from "./pages/DashboardPage";
+import CabeceirosPage from "./pages/CabeceirosPage";
 
 
 function Layout() {
@@ -23,6 +24,8 @@ function Layout() {
       <main className="p-6 lg:ml-58 lg:p-10">
         <Routes>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/cabeceiros" element={<CabeceirosPage />} />
         </Routes>
       </main>
     </div>
