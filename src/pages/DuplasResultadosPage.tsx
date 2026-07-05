@@ -3,7 +3,7 @@ import PageHeader from "../components/layout/page-header";
 import DuplasResultadosTable, {
   type DuplaResultadoRow,
 } from "../components/duplas-resultados/duplas-resultados-table";
-import RegraBoisPanelEditavel from "../components/duplas-resultados/regra-bois-panel";
+// import RegraBoisPanelEditavel from "../components/duplas-resultados/regra-bois-panel";
 
 // Dados de exemplo — substituir pela consulta real (SQLite) quando a lógica for implementada
 const DUPLAS_EXEMPLO: DuplaResultadoRow[] = [
@@ -70,7 +70,7 @@ export default function DuplasResultadosPage() {
 
       <div className="flex flex-col gap-5 p-6 lg:flex-row lg:p-10">
         <DuplasResultadosTable duplas={DUPLAS_EXEMPLO} />
-        <RegraBoisPanelEditavel />
+        {/* <RegraBoisPanelEditavel /> */}
       </div>
     </div>
   );
