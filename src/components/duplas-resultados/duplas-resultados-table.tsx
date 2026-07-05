@@ -1,5 +1,5 @@
 import { useState } from "react";
-import Avatar from "../ui/avatar";
+// import Avatar from "../ui/avatar";
 import LiveBadge from "../ui/live-badge";
 
 export interface DuplaResultadoRow {
@@ -209,7 +209,7 @@ export default function DuplasResultadosTable({
                 </td>
                 <td className="px-2 py-3">
                   <div className="flex items-center gap-2">
-                    <Avatar initials={dupla.pezeiroIniciais} />
+                    {/* <Avatar initials={dupla.pezeiroIniciais} /> */}
                     <span className="font-semibold text-slate-900">
                       {dupla.pezeiroNome}
                     </span>
