@@ -1,13 +1,12 @@
-import { HashRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import Sidebar from "./components/layout/sidebar";
 import { ROUTE_BY_LABEL, labelForPath, type MenuLabel } from "./routes/menu-routes";
 
 import DashboardPage from "./pages/DashboardPage";
+import ProvasPage from "./pages/ProvasPage";
 import CabeceirosPage from "./pages/CabeceirosPage";
 import PezeirosPage from "./pages/PezeirosPage";
 import DuplasResultadosPage from "./pages/DuplasResultadosPage";
-import ProvasPage from "./pages/ProvasPage";
-
 
 function Layout() {
   const navigate = useNavigate();
@@ -23,11 +22,11 @@ function Layout() {
     <div className="min-h-screen bg-white">
       <Sidebar active={activeLabel} onNavigate={handleNavigate} />
 
-      {/* Área de conteúdo: recuada em desktop (largura da sidebar = w-60 = 15rem) */}
-      <main className="p-6 lg:ml-58 lg:p-10">
+      {/* Área de conteúdo: recuada em desktop (largura da sidebar = w-72 = 18rem) */}
+      <main className="p-6 lg:ml-72 lg:p-10">
         <Routes>
-          {/* <Route path="/" element={<ProvasPage />} /> */}
-          <Route path="/" element={<DashboardPage />} />
+          <Route path="/" element={<ProvasPage />} />
+          <Route path="/dashboard/:id" element={<DashboardPage />} />
           <Route path="/cabeceiros" element={<CabeceirosPage />} />
           <Route path="/pezeiros" element={<PezeirosPage />} />
           <Route path="/duplas-resultados" element={<DuplasResultadosPage />} />

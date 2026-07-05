@@ -1,34 +1,60 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PageHeader from "../components/layout/page-header";
 import ConfirmDialog from "../components/ui/confirm-dialog";
 import ProvaForm, { type NovaProva } from "../components/provas/prova-form";
 import ProvaCard, { type Prova } from "../components/provas/prova-card";
-
-// Dados de exemplo — substituir pela consulta real (SQLite) quando a lógica for implementada
-const PROVAS_EXEMPLO: Prova[] = [
-  { id: "1", nome: "1ª Prova de Laço", data: "2026-07-12" },
-  { id: "2", nome: "2ª Prova de Laço", data: "2026-08-02" },
-  { id: "3", nome: "Copa Regional", data: "2026-08-20" },
-];
+import { criarProva, deletarProva, listarProvas } from "../services/provas";
 
 export default function ProvasPage() {
-  const [provas, setProvas] = useState<Prova[]>(PROVAS_EXEMPLO);
+  const [provas, setProvas] = useState<Prova[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
   const [provaParaExcluir, setProvaParaExcluir] = useState<Prova | null>(null);
 
-  function handleAdd({ nome, data }: NovaProva) {
-    setProvas((prev) => [...prev, { id: crypto.randomUUID(), nome, data }]);
+  useEffect(() => {
+    carregarProvas();
+  }, []);
+
+  async function carregarProvas() {
+    setCarregando(true);
+    setErro(null);
+    try {
+      const dados = await listarProvas();
+      setProvas(dados);
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível carregar as provas.");
+    } finally {
+      setCarregando(false);
+    }
   }
 
-  function handleAcessar(id: string) {
+  async function handleAdd({ nome, data }: NovaProva) {
+    try {
+      // O formulário só pede nome e data — baterias ainda não têm UI própria,
+      // então por enquanto toda prova criada aqui nasce sem bateria.
+      const novaProva = await criarProva({ nome, data, bateria: false, bateriaNu: null });
+      setProvas((prev) => [novaProva, ...prev]);
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível criar a prova.");
+    }
+  }
+
+  function handleAcessar(id: number) {
     // TODO: navegar para a tela de detalhes da prova assim que ela existir
     console.log("Acessar prova", id);
-
+        
   }
 
-  function handleConfirmarExclusao() {
+  async function handleConfirmarExclusao() {
     if (!provaParaExcluir) return;
-    setProvas((prev) => prev.filter((p) => p.id !== provaParaExcluir.id));
-    setProvaParaExcluir(null);
+    try {
+      await deletarProva(provaParaExcluir.id);
+      setProvas((prev) => prev.filter((p) => p.id !== provaParaExcluir.id));
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível excluir a prova.");
+    } finally {
+      setProvaParaExcluir(null);
+    }
   }
 
   return (
@@ -41,7 +67,17 @@ export default function ProvasPage() {
       <div className="space-y-5 p-6 lg:p-10">
         <ProvaForm onAdd={handleAdd} />
 
-        {provas.length === 0 ? (
+        {erro && (
+          <div className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-600">
+            {erro}
+          </div>
+        )}
+
+        {carregando ? (
+          <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+            <p className="text-sm text-slate-400">Carregando provas...</p>
+          </div>
+        ) : provas.length === 0 ? (
           <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
             <p className="text-sm text-slate-400">Nenhuma prova criada ainda.</p>
           </div>

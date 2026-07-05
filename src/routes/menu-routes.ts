@@ -17,5 +17,6 @@ const LABEL_BY_ROUTE: Record<string, MenuLabel> = Object.fromEntries(
 );
 
 export function labelForPath(pathname: string): MenuLabel {
-  return LABEL_BY_ROUTE[pathname] ?? "Dashboard";
+  if (pathname.startsWith("/dashboard/")) return "Dashboard";
+  return LABEL_BY_ROUTE[pathname] ?? "Provas";
 }

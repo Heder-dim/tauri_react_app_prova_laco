@@ -1,15 +1,15 @@
 import { Calendar, Trash2, ArrowRight } from "lucide-react";
 
 export interface Prova {
-  id: string;
+  id: number;
   nome: string;
   data: string; // ISO (YYYY-MM-DD)
 }
 
 export interface ProvaCardProps {
   prova: Prova;
-  onAcessar: (id: string) => void;
-  onDeletar: (id: string) => void;
+  onAcessar: (id: number) => void;
+  onDeletar: (id: number) => void;
 }
 
 /** Formata "YYYY-MM-DD" como "05 de julho de 2026", sem problema de fuso horário */
@@ -39,7 +39,7 @@ export default function ProvaCard({ prova, onAcessar, onDeletar }: ProvaCardProp
           type="button"
           aria-label={`Excluir ${prova.nome}`}
           onClick={() => onDeletar(prova.id)}
-          className="flex items-center cursor-pointer justify-center rounded-xl border border-slate-200 p-2.5 text-slate-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-500"
+          className="flex cursor-pointer items-center justify-center rounded-xl border border-slate-200 p-2.5 text-slate-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-500"
         >
           <Trash2 size={16} />
         </button>
