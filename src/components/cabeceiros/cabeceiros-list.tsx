@@ -2,14 +2,14 @@ import { Pencil, Trash2, Users } from "lucide-react";
 import Avatar from "../ui/avatar";
 
 export interface Cabeceiro {
-  id: string;
+  id: number;
   nome: string;
   hc: number;
 }
 
 export interface CabeceirosListProps {
   cabeceiros: Cabeceiro[];
-  onRemove: (id: string) => void;
+  onRemove: (id: number) => void;
 }
 
 function iniciaisDoNome(nome: string) {

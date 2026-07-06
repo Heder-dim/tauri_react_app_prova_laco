@@ -1,25 +1,53 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import PageHeader from "../components/layout/page-header";
 import StatBox from "../components/ui/stat-box";
 import CabeceiroForm, { type NovoCabeceiro } from "../components/cabeceiros/cabeceiro-form";
 import CabeceirosList, { type Cabeceiro } from "../components/cabeceiros/cabeceiros-list";
-
-// Dados de exemplo — substituir pela consulta real (SQLite) quando a lógica for implementada
-const CABECEIROS_EXEMPLO: Cabeceiro[] = [
-  { id: "1", nome: "João Vaqueiro", hc: 2.0 },
-  { id: "2", nome: "Pedro Alves", hc: 3.5 },
-  { id: "3", nome: "Antônio Silva", hc: 1.5 },
-];
+import { criarCabeceiro, deletarCabeceiro, listarCabeceirosPorProva } from "../services/cabeceiros";
 
 export default function CabeceirosPage() {
-  const [cabeceiros, setCabeceiros] = useState<Cabeceiro[]>(CABECEIROS_EXEMPLO);
+  const { idProva } = useParams<{ idProva: string }>();
+  const idProvaNum = Number(idProva);
 
-  function handleAdd({ nome, hc }: NovoCabeceiro) {
-    setCabeceiros((prev) => [...prev, { id: crypto.randomUUID(), nome, hc }]);
+  const [cabeceiros, setCabeceiros] = useState<Cabeceiro[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    carregarCabeceiros();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idProvaNum]);
+
+  async function carregarCabeceiros() {
+    setCarregando(true);
+    setErro(null);
+    try {
+      const dados = await listarCabeceirosPorProva(idProvaNum);
+      setCabeceiros(dados);
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível carregar os cabeceiros.");
+    } finally {
+      setCarregando(false);
+    }
   }
 
-  function handleRemove(id: string) {
-    setCabeceiros((prev) => prev.filter((c) => c.id !== id));
+  async function handleAdd({ nome, hc }: NovoCabeceiro) {
+    try {
+      const novoCabeceiro = await criarCabeceiro(nome, hc, idProvaNum);
+      setCabeceiros((prev) => [...prev, novoCabeceiro]);
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível cadastrar o cabeceiro.");
+    }
+  }
+
+  async function handleRemove(id: number) {
+    try {
+      await deletarCabeceiro(id);
+      setCabeceiros((prev) => prev.filter((c) => c.id !== id));
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível remover o cabeceiro.");
+    }
   }
 
   return (
@@ -44,8 +72,20 @@ export default function CabeceirosPage() {
           </div>
         </div>
 
+        {erro && (
+          <div className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-600">
+            {erro}
+          </div>
+        )}
+
         {/* Linha 2 — Lista de cabeceiros cadastrados */}
-        <CabeceirosList cabeceiros={cabeceiros} onRemove={handleRemove} />
+        {carregando ? (
+          <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+            <p className="text-sm text-slate-400">Carregando cabeceiros...</p>
+          </div>
+        ) : (
+          <CabeceirosList cabeceiros={cabeceiros} onRemove={handleRemove} />
+        )}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Avatar from "../ui/avatar";
 import LiveBadge from "../ui/live-badge";
 
@@ -68,6 +68,14 @@ export default function DuplasTable({
   // Guarda o texto exatamente como foi digitado em cada campo (chave: "tempo-<duplaIndex>-<tempoIndex>" ou "boiFinal-<duplaIndex>"),
   // pra não perder a vírgula/ponto ao reformatar o número a cada tecla.
   const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
+
+  // Ressincroniza sempre que o array recebido via prop mudar de fato — necessário porque
+  // o estado interno existe pra permitir edição local, mas não pode "ficar preso" nos dados
+  // iniciais quando o cabeceiro selecionado muda ou uma nova dupla é formada na página.
+  useEffect(() => {
+    setDuplas(duplasIniciais);
+    setRawInputs({});
+  }, [duplasIniciais]);
 
   function handleTempoChange(duplaIndex: number, tempoIndex: number, rawValue: string) {
     setRawInputs((prev) => ({ ...prev, [`tempo-${duplaIndex}-${tempoIndex}`]: rawValue }));

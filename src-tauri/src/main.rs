@@ -3,6 +3,8 @@
 
 // Se seu `npm run tauri init` já gerou um main.rs, funda este conteúdo com o que já existe
 // (mantendo o `#![cfg_attr(...)]` do topo, se houver).
+// Se seu `npm run tauri init` já gerou um main.rs, funda este conteúdo com o que já existe
+// (mantendo o `#![cfg_attr(...)]` do topo, se houver).
 
 mod commands;
 mod db;
@@ -23,6 +25,17 @@ fn main() {
             commands::provas::criar_prova,
             commands::provas::listar_provas,
             commands::provas::deletar_prova,
+            commands::cabeceiros::criar_cabeceiro,
+            commands::cabeceiros::listar_cabeceiros_por_prova,
+            commands::cabeceiros::deletar_cabeceiro,
+            commands::pezeiros::criar_pezeiro,
+            commands::pezeiros::listar_pezeiros_por_prova,
+            commands::pezeiros::deletar_pezeiro,
+            commands::duplas::criar_dupla,
+            commands::duplas::listar_duplas_por_cabeceiro,
+            commands::duplas::listar_duplas_por_prova,
+            commands::duplas::atualizar_dupla,
+            commands::duplas::deletar_dupla,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar a aplicação Tauri");

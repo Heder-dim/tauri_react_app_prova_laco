@@ -1,6 +1,6 @@
 import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import Sidebar from "./components/layout/sidebar";
-import { ROUTE_BY_LABEL, labelForPath, type MenuLabel } from "./routes/menu-routes";
+import { routeForLabel, labelForPath, idProvaFromPath, type MenuLabel } from "./routes/menu-routes";
 
 import DashboardPage from "./pages/DashboardPage";
 import ProvasPage from "./pages/ProvasPage";
@@ -13,9 +13,10 @@ function Layout() {
   const location = useLocation();
 
   const activeLabel = labelForPath(location.pathname);
+  const idProva = idProvaFromPath(location.pathname);
 
   function handleNavigate(label: MenuLabel) {
-    navigate(ROUTE_BY_LABEL[label]);
+    navigate(routeForLabel(label, idProva));
   }
 
   return (
@@ -26,10 +27,14 @@ function Layout() {
       <main className="p-6 lg:ml-72 lg:p-10">
         <Routes>
           <Route path="/" element={<ProvasPage />} />
-          <Route path="/dashboard/:id" element={<DashboardPage />} />
-          <Route path="/cabeceiros" element={<CabeceirosPage />} />
-          <Route path="/pezeiros" element={<PezeirosPage />} />
-          <Route path="/duplas-resultados" element={<DuplasResultadosPage />} />
+
+          <Route path="/provas/:idProva/dashboard" element={<DashboardPage />} />
+          <Route path="/provas/:idProva/cabeceiros" element={<CabeceirosPage />} />
+          <Route path="/provas/:idProva/pezeiros" element={<PezeirosPage />} />
+          <Route path="/provas/:idProva/duplas-resultados" element={<DuplasResultadosPage />} />
+
+          {/* /provas/:idProva sozinho (sem sub-rota) cai direto no Dashboard daquela prova */}
+          <Route path="/provas/:idProva" element={<Navigate to="dashboard" replace />} />
         </Routes>
       </main>
     </div>

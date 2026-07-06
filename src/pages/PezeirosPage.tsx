@@ -1,25 +1,53 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import PageHeader from "../components/layout/page-header";
 import StatBox from "../components/ui/stat-box";
 import PezeiroForm, { type NovoPezeiro } from "../components/pezeiros/pezeiro-form";
 import PezeirosList, { type Pezeiro } from "../components/pezeiros/pezeiros-list";
-
-// Dados de exemplo — substituir pela consulta real (SQLite) quando a lógica for implementada
-const PEZEIROS_EXEMPLO: Pezeiro[] = [
-  { id: "1", nome: "Carlos Mendes", hc: 2.5 },
-  { id: "2", nome: "Rafael Lima", hc: 3.0 },
-  { id: "3", nome: "Marcos Souza", hc: 2.0 },
-];
+import { criarPezeiro, deletarPezeiro, listarPezeirosPorProva } from "../services/pezeiros";
 
 export default function PezeirosPage() {
-  const [pezeiros, setPezeiros] = useState<Pezeiro[]>(PEZEIROS_EXEMPLO);
+  const { idProva } = useParams<{ idProva: string }>();
+  const idProvaNum = Number(idProva);
 
-  function handleAdd({ nome, hc }: NovoPezeiro) {
-    setPezeiros((prev) => [...prev, { id: crypto.randomUUID(), nome, hc }]);
+  const [pezeiros, setPezeiros] = useState<Pezeiro[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    carregarPezeiros();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idProvaNum]);
+
+  async function carregarPezeiros() {
+    setCarregando(true);
+    setErro(null);
+    try {
+      const dados = await listarPezeirosPorProva(idProvaNum);
+      setPezeiros(dados);
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível carregar os pezeiros.");
+    } finally {
+      setCarregando(false);
+    }
   }
 
-  function handleRemove(id: string) {
-    setPezeiros((prev) => prev.filter((p) => p.id !== id));
+  async function handleAdd({ nome, hc }: NovoPezeiro) {
+    try {
+      const novoPezeiro = await criarPezeiro(nome, hc, idProvaNum);
+      setPezeiros((prev) => [...prev, novoPezeiro]);
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível cadastrar o pezeiro.");
+    }
+  }
+
+  async function handleRemove(id: number) {
+    try {
+      await deletarPezeiro(id);
+      setPezeiros((prev) => prev.filter((p) => p.id !== id));
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível remover o pezeiro.");
+    }
   }
 
   return (
@@ -44,8 +72,20 @@ export default function PezeirosPage() {
           </div>
         </div>
 
+        {erro && (
+          <div className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-600">
+            {erro}
+          </div>
+        )}
+
         {/* Linha 2 — Lista de pezeiros cadastrados */}
-        <PezeirosList pezeiros={pezeiros} onRemove={handleRemove} />
+        {carregando ? (
+          <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+            <p className="text-sm text-slate-400">Carregando pezeiros...</p>
+          </div>
+        ) : (
+          <PezeirosList pezeiros={pezeiros} onRemove={handleRemove} />
+        )}
       </div>
     </div>
   );

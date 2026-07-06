@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import PageHeader from "../components/layout/page-header";
 import ConfirmDialog from "../components/ui/confirm-dialog";
 import ProvaForm, { type NovaProva } from "../components/provas/prova-form";
@@ -6,6 +7,7 @@ import ProvaCard, { type Prova } from "../components/provas/prova-card";
 import { criarProva, deletarProva, listarProvas } from "../services/provas";
 
 export default function ProvasPage() {
+  const navigate = useNavigate();
   const [provas, setProvas] = useState<Prova[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -40,9 +42,7 @@ export default function ProvasPage() {
   }
 
   function handleAcessar(id: number) {
-    // TODO: navegar para a tela de detalhes da prova assim que ela existir
-    console.log("Acessar prova", id);
-        
+    navigate(`/provas/${id}/dashboard`);
   }
 
   async function handleConfirmarExclusao() {
