@@ -21,5 +21,10 @@ pub fn init_db(app: &AppHandle) -> Result<Connection, Box<dyn std::error::Error>
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
     conn.execute_batch(SCHEMA)?;
 
+    // Migração leve: bancos criados antes da coluna `boi_6` existir não a recebem
+    // automaticamente (CREATE TABLE IF NOT EXISTS não altera tabelas já existentes).
+    // Ignora o erro se a coluna já existir.
+    let _ = conn.execute("ALTER TABLE duplas ADD COLUMN boi_6 REAL", []);
+
     Ok(conn)
 }

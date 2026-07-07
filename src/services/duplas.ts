@@ -12,6 +12,7 @@ export interface DuplaDb {
   boi_3: number | null;
   boi_4: number | null;
   boi_5: number | null;
+  boi_6: number | null;
   parcial: number | null;
   boi_final: number | null;
   media: number | null;
@@ -60,6 +61,7 @@ export interface AtualizarDuplaDb {
   boi3: number | null;
   boi4: number | null;
   boi5: number | null;
+  boi6: number | null;
   parcial: number | null;
   boiFinal: number | null;
   media: number | null;
@@ -74,6 +76,7 @@ export function atualizarDupla(dados: AtualizarDuplaDb): Promise<void> {
     boi3: dados.boi3,
     boi4: dados.boi4,
     boi5: dados.boi5,
+    boi6: dados.boi6,
     parcial: dados.parcial,
     boiFinal: dados.boiFinal,
     media: dados.media,
@@ -88,7 +91,7 @@ export function deletarDupla(id: number): Promise<void> {
 // ---- Conversão entre o formato do banco (boi_1..boi_5) e o array `tempos` usado nas tabelas ----
 
 export function boisParaTempos(dupla: DuplaDb): (number | null)[] {
-  return [dupla.boi_1, dupla.boi_2, dupla.boi_3, dupla.boi_4, dupla.boi_5];
+  return [dupla.boi_1, dupla.boi_2, dupla.boi_3, dupla.boi_4, dupla.boi_5, dupla.boi_6];
 }
 
 export function temposParaBois(tempos: (number | null)[]) {
@@ -98,5 +101,6 @@ export function temposParaBois(tempos: (number | null)[]) {
     boi3: tempos[2] ?? null,
     boi4: tempos[3] ?? null,
     boi5: tempos[4] ?? null,
+    boi6: tempos[5] ?? null,
   };
 }

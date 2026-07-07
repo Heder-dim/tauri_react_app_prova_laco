@@ -20,11 +20,12 @@ fn map_dupla_detalhada(row: &rusqlite::Row) -> rusqlite::Result<DuplaDetalhada> 
         boi_3: row.get(12)?,
         boi_4: row.get(13)?,
         boi_5: row.get(14)?,
-        parcial: row.get(15)?,
-        boi_final: row.get(16)?,
-        media: row.get(17)?,
-        para_ganhar: row.get(18)?,
-        ganhador: row.get::<_, i64>(19)? != 0,
+        boi_6: row.get(15)?,
+        parcial: row.get(16)?,
+        boi_final: row.get(17)?,
+        media: row.get(18)?,
+        para_ganhar: row.get(19)?,
+        ganhador: row.get::<_, i64>(20)? != 0,
     })
 }
 
@@ -33,7 +34,7 @@ const SELECT_DUPLA_DETALHADA: &str = "
         duplas.id, duplas.id_cabeceiro, cabeceiros.nome, cabeceiros.hc,
         duplas.id_pezeiro, pezeiros.nome, pezeiros.hc,
         duplas.numero_bateria, duplas.hc_soma, duplas.bois_nu,
-        duplas.boi_1, duplas.boi_2, duplas.boi_3, duplas.boi_4, duplas.boi_5,
+        duplas.boi_1, duplas.boi_2, duplas.boi_3, duplas.boi_4, duplas.boi_5, duplas.boi_6,
         duplas.parcial, duplas.boi_final, duplas.media, duplas.para_ganhar, duplas.ganhador
     FROM duplas
     JOIN cabeceiros ON cabeceiros.id = duplas.id_cabeceiro
@@ -72,6 +73,7 @@ pub fn criar_dupla(
         boi_3: None,
         boi_4: None,
         boi_5: None,
+        boi_6: None,
         parcial: None,
         boi_final: None,
         media: None,
@@ -132,6 +134,7 @@ pub fn atualizar_dupla(
     boi_3: Option<f64>,
     boi_4: Option<f64>,
     boi_5: Option<f64>,
+    boi_6: Option<f64>,
     parcial: Option<f64>,
     boi_final: Option<f64>,
     media: Option<f64>,
@@ -142,12 +145,12 @@ pub fn atualizar_dupla(
 
     conn.execute(
         "UPDATE duplas SET
-            boi_1 = ?1, boi_2 = ?2, boi_3 = ?3, boi_4 = ?4, boi_5 = ?5,
-            parcial = ?6, boi_final = ?7, media = ?8, para_ganhar = ?9,
+            boi_1 = ?1, boi_2 = ?2, boi_3 = ?3, boi_4 = ?4, boi_5 = ?5, boi_6 = ?6,
+            parcial = ?7, boi_final = ?8, media = ?9, para_ganhar = ?10,
             updated_at = datetime('now')
-         WHERE id = ?10",
+         WHERE id = ?11",
         params![
-            boi_1, boi_2, boi_3, boi_4, boi_5, parcial, boi_final, media, para_ganhar, id
+            boi_1, boi_2, boi_3, boi_4, boi_5, boi_6, parcial, boi_final, media, para_ganhar, id
         ],
     )
     .map_err(|e| e.to_string())?;

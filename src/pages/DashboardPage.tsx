@@ -8,6 +8,7 @@ import DuplasTable, { type DuplaRow } from "../components/dashboard/duplas-table
 import CabeceiroSelect from "../components/dashboard/cabeceiro-select";
 import PezeiroSelect, { type PezeiroOption } from "../components/dashboard/pezeiro-select";
 // import RegraBoisPanel from "../components/dashboard/regra-bois-panel";
+import { calcularBoisNu } from "../lib/regras-bois";
 import { type CabeceiroDb, listarCabeceirosPorProva } from "../services/cabeceiros";
 import { type PezeiroDb, listarPezeirosPorProva } from "../services/pezeiros";
 import {
@@ -134,11 +135,12 @@ export default function DashboardPage() {
     if (!pezeiro) return;
 
     try {
+      const hcSoma = cabeceiroSelecionado.hc + pezeiro.hc;
       const nova = await criarDupla({
         idCabeceiro: cabeceiroSelecionado.id,
         idPezeiro: pezeiro.id,
-        hcSoma: cabeceiroSelecionado.hc + pezeiro.hc,
-        boisNu: 1, // provisório — a quantidade real vem da Regra de Qtd. de Bois, ainda não conectada aqui
+        hcSoma,
+        boisNu: calcularBoisNu(hcSoma),
       });
 
       const novaLinha: DuplaComId = {
@@ -187,7 +189,7 @@ export default function DashboardPage() {
 
       if (!mudou) return;
 
-      const { boi1, boi2, boi3, boi4, boi5 } = temposParaBois(dupla.tempos);
+      const { boi1, boi2, boi3, boi4, boi5, boi6 } = temposParaBois(dupla.tempos);
       atualizarDupla({
         id: dupla.id,
         boi1,
@@ -195,6 +197,7 @@ export default function DashboardPage() {
         boi3,
         boi4,
         boi5,
+        boi6,
         parcial: dupla.parcial,
         boiFinal: dupla.boiFinal,
         media: dupla.media,

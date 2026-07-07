@@ -42,7 +42,7 @@ export default function ProvasPage() {
   }
 
   function handleAcessar(id: number) {
-    navigate(`/provas/${id}/dashboard`);
+    navigate(`/provas/${id}/duplas-resultados`);
   }
 
   async function handleConfirmarExclusao() {

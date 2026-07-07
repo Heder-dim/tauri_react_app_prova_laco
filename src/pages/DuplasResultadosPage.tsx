@@ -94,7 +94,7 @@ export default function DuplasResultadosPage() {
 
       if (!mudou) return;
 
-      const { boi1, boi2, boi3, boi4, boi5 } = temposParaBois(dupla.tempos);
+      const { boi1, boi2, boi3, boi4, boi5, boi6 } = temposParaBois(dupla.tempos);
       atualizarDupla({
         id: dupla.id,
         boi1,
@@ -102,6 +102,7 @@ export default function DuplasResultadosPage() {
         boi3,
         boi4,
         boi5,
+        boi6,
         parcial: dupla.parcial,
         boiFinal: dupla.boiFinal,
         media: dupla.media,

@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS duplas (
     boi_3           REAL,
     boi_4           REAL,
     boi_5           REAL,
+    boi_6           REAL,
 
     parcial         REAL,                       -- calculado no front-end (soma de boi_1..boi_5)
     boi_final       REAL,                       -- campo independente, editável manualmente

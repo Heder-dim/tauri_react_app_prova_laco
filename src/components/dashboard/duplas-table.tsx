@@ -9,7 +9,7 @@ export interface DuplaRow {
   hcPez: number;
   hcDupla: number;
   bois: number;
-  /** Tempos do 1º ao 5º boi, em segundos. `null` = ainda não corrido. */
+  /** Tempos do 1º ao 6º boi, em segundos. `null` = ainda não corrido. */
   tempos: (number | null)[];
   /** Calculado automaticamente a partir de `tempos` (soma) */
   parcial: number;
@@ -147,7 +147,7 @@ export default function DuplasTable({
 
       {/* Tabela */}
       <div className="overflow-x-auto">
-        <table className="border-collapse table-fixed text-sm" style={{ width: 1016 }}>
+        <table className="border-collapse table-fixed text-sm" style={{ width: 1080 }}>
           <colgroup>
             <col style={{ width: 40 }} /> {/* # */}
             <col style={{ width: 160 }} /> {/* Pezeiro */}
@@ -159,6 +159,7 @@ export default function DuplasTable({
             <col style={{ width: 64 }} /> {/* 3º Boi */}
             <col style={{ width: 64 }} /> {/* 4º Boi */}
             <col style={{ width: 64 }} /> {/* 5º Boi */}
+            <col style={{ width: 64 }} /> {/* 6º Boi */}
             <col style={{ width: 70 }} /> {/* Parcial */}
             <col style={{ width: 70 }} /> {/* Boi Final */}
             <col style={{ width: 70 }} /> {/* Média */}
@@ -181,7 +182,7 @@ export default function DuplasTable({
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 Bois
               </th>
-              <th colSpan={5} className="border-b border-slate-100 bg-slate-50 px-2 py-1.5 text-center text-xs font-semibold text-slate-500">
+              <th colSpan={6} className="border-b border-slate-100 bg-slate-50 px-2 py-1.5 text-center text-xs font-semibold text-slate-500">
                 Tempo de Cada Boi (seg.)
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
@@ -198,7 +199,7 @@ export default function DuplasTable({
               </th>
             </tr>
             <tr>
-              {["1º Boi", "2º Boi", "3º Boi", "4º Boi", "5º Boi"].map((label) => (
+              {["1º Boi", "2º Boi", "3º Boi", "4º Boi", "5º Boi", "6º Boi"].map((label) => (
                 <th
                   key={label}
                   className="border-b border-slate-100 bg-slate-50 px-2 py-1.5 text-center text-xs font-medium text-slate-400"
