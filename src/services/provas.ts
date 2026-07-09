@@ -1,11 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export type CategoriaProva = "Aberta" | "Soma";
+
 export interface ProvaDb {
   id: number;
   nome: string;
   data: string;
   bateria: boolean;
   bateria_nu: number | null;
+  categoria: CategoriaProva;
 }
 
 export interface NovaProvaDb {
@@ -13,6 +16,7 @@ export interface NovaProvaDb {
   data: string;
   bateria: boolean;
   bateriaNu?: number | null;
+  categoria: CategoriaProva;
 }
 
 /**
@@ -26,6 +30,7 @@ export function criarProva(nova: NovaProvaDb): Promise<ProvaDb> {
     data: nova.data,
     bateria: nova.bateria,
     bateriaNu: nova.bateriaNu ?? null,
+    categoria: nova.categoria,
   });
 }
 

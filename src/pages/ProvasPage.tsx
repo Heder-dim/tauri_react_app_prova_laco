@@ -30,11 +30,11 @@ export default function ProvasPage() {
     }
   }
 
-  async function handleAdd({ nome, data }: NovaProva) {
+  async function handleAdd({ nome, data, categoria }: NovaProva) {
     try {
-      // O formulário só pede nome e data — baterias ainda não têm UI própria,
+      // O formulário só pede nome, data e categoria — baterias ainda não têm UI própria,
       // então por enquanto toda prova criada aqui nasce sem bateria.
-      const novaProva = await criarProva({ nome, data, bateria: false, bateriaNu: null });
+      const novaProva = await criarProva({ nome, data, bateria: false, bateriaNu: null, categoria });
       setProvas((prev) => [novaProva, ...prev]);
     } catch (e) {
       setErro(typeof e === "string" ? e : "Não foi possível criar a prova.");
@@ -42,7 +42,7 @@ export default function ProvasPage() {
   }
 
   function handleAcessar(id: number) {
-    navigate(`/provas/${id}/duplas-resultados`);
+    navigate(`/provas/${id}/dashboard`);
   }
 
   async function handleConfirmarExclusao() {

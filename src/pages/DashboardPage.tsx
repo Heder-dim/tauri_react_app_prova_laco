@@ -61,6 +61,7 @@ export default function DashboardPage() {
 
   const [cabeceiroSelecionadoId, setCabeceiroSelecionadoId] = useState<number | null>(null);
   const [pezeiroSelecionadoId, setPezeiroSelecionadoId] = useState<number | null>(null);
+  const [inscricaoTexto, setInscricaoTexto] = useState("");
 
   const [duplas, setDuplas] = useState<DuplaComId[]>([]);
   const [carregandoDuplas, setCarregandoDuplas] = useState(false);
@@ -131,6 +132,12 @@ export default function DashboardPage() {
   async function handleFormarDupla() {
     if (!cabeceiroSelecionado || pezeiroSelecionadoId === null) return;
 
+    const inscricao = Number(inscricaoTexto);
+    if (!inscricaoTexto.trim() || Number.isNaN(inscricao)) {
+      setErro("Informe um número de inscrição válido.");
+      return;
+    }
+
     const pezeiro = pezeiros.find((p) => p.id === pezeiroSelecionadoId);
     if (!pezeiro) return;
 
@@ -139,6 +146,7 @@ export default function DashboardPage() {
       const nova = await criarDupla({
         idCabeceiro: cabeceiroSelecionado.id,
         idPezeiro: pezeiro.id,
+        inscricao,
         hcSoma,
         boisNu: calcularBoisNu(hcSoma),
       });
@@ -161,6 +169,7 @@ export default function DashboardPage() {
 
       setDuplas((prev) => [...prev, novaLinha]);
       setPezeiroSelecionadoId(null);
+      setInscricaoTexto("");
     } catch (e) {
       setErro(typeof e === "string" ? e : "Não foi possível formar a dupla.");
     }
@@ -274,11 +283,28 @@ export default function DashboardPage() {
                   onSelect={setPezeiroSelecionadoId}
                 />
 
+                <div className="mt-2.5">
+                  <label htmlFor="inscricao" className="mb-1.5 block text-xs text-slate-500">
+                    Nº de Inscrição
+                  </label>
+                  <input
+                    id="inscricao"
+                    type="text"
+                    inputMode="numeric"
+                    value={inscricaoTexto}
+                    onChange={(e) => setInscricaoTexto(e.target.value)}
+                    placeholder="Ex: 101"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+
                 <div className="mt-3 flex flex-col gap-2.5 sm:flex-row">
                   <button
                     type="button"
                     onClick={handleFormarDupla}
-                    disabled={!cabeceiroSelecionado || pezeiroSelecionadoId === null}
+                    disabled={
+                      !cabeceiroSelecionado || pezeiroSelecionadoId === null || !inscricaoTexto.trim()
+                    }
                     className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
                   >
                     <UserPlus size={16} />

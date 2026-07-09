@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { CalendarPlus } from "lucide-react";
+import type { CategoriaProva } from "../../services/provas";
 
 export interface NovaProva {
   nome: string;
   data: string; // formato ISO (YYYY-MM-DD), vindo do <input type="date">
+  categoria: CategoriaProva;
 }
 
 export interface ProvaFormProps {
@@ -13,6 +15,7 @@ export interface ProvaFormProps {
 export default function ProvaForm({ onAdd }: ProvaFormProps) {
   const [nome, setNome] = useState("");
   const [data, setData] = useState("");
+  const [categoria, setCategoria] = useState<CategoriaProva>("Aberta");
   const [erro, setErro] = useState<string | null>(null);
 
   function handleSubmit(e: FormEvent) {
@@ -29,9 +32,10 @@ export default function ProvaForm({ onAdd }: ProvaFormProps) {
       return;
     }
 
-    onAdd({ nome: nomeAparado, data });
+    onAdd({ nome: nomeAparado, data, categoria });
     setNome("");
     setData("");
+    setCategoria("Aberta");
     setErro(null);
   }
 
@@ -70,6 +74,21 @@ export default function ProvaForm({ onAdd }: ProvaFormProps) {
             onChange={(e) => setData(e.target.value)}
             className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
           />
+        </div>
+
+        <div className="sm:w-36">
+          <label htmlFor="prova-categoria" className="mb-1.5 block text-xs text-slate-500">
+            Categoria
+          </label>
+          <select
+            id="prova-categoria"
+            value={categoria}
+            onChange={(e) => setCategoria(e.target.value as CategoriaProva)}
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+          >
+            <option value="Aberta">Aberta</option>
+            <option value="Soma">Soma</option>
+          </select>
         </div>
 
         <button

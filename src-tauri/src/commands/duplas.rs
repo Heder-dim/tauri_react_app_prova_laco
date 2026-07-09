@@ -13,19 +13,20 @@ fn map_dupla_detalhada(row: &rusqlite::Row) -> rusqlite::Result<DuplaDetalhada> 
         pezeiro_nome: row.get(5)?,
         hc_pezeiro: row.get(6)?,
         numero_bateria: row.get(7)?,
-        hc_soma: row.get(8)?,
-        bois_nu: row.get(9)?,
-        boi_1: row.get(10)?,
-        boi_2: row.get(11)?,
-        boi_3: row.get(12)?,
-        boi_4: row.get(13)?,
-        boi_5: row.get(14)?,
-        boi_6: row.get(15)?,
-        parcial: row.get(16)?,
-        boi_final: row.get(17)?,
-        media: row.get(18)?,
-        para_ganhar: row.get(19)?,
-        ganhador: row.get::<_, i64>(20)? != 0,
+        inscricao: row.get(8)?,
+        hc_soma: row.get(9)?,
+        bois_nu: row.get(10)?,
+        boi_1: row.get(11)?,
+        boi_2: row.get(12)?,
+        boi_3: row.get(13)?,
+        boi_4: row.get(14)?,
+        boi_5: row.get(15)?,
+        boi_6: row.get(16)?,
+        parcial: row.get(17)?,
+        boi_final: row.get(18)?,
+        media: row.get(19)?,
+        para_ganhar: row.get(20)?,
+        ganhador: row.get::<_, i64>(21)? != 0,
     })
 }
 
@@ -33,7 +34,7 @@ const SELECT_DUPLA_DETALHADA: &str = "
     SELECT
         duplas.id, duplas.id_cabeceiro, cabeceiros.nome, cabeceiros.hc,
         duplas.id_pezeiro, pezeiros.nome, pezeiros.hc,
-        duplas.numero_bateria, duplas.hc_soma, duplas.bois_nu,
+        duplas.numero_bateria, duplas.inscricao, duplas.hc_soma, duplas.bois_nu,
         duplas.boi_1, duplas.boi_2, duplas.boi_3, duplas.boi_4, duplas.boi_5, duplas.boi_6,
         duplas.parcial, duplas.boi_final, duplas.media, duplas.para_ganhar, duplas.ganhador
     FROM duplas
@@ -42,10 +43,12 @@ const SELECT_DUPLA_DETALHADA: &str = "
 ";
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn criar_dupla(
     id_cabeceiro: i64,
     id_pezeiro: i64,
     numero_bateria: Option<i64>,
+    inscricao: i64,
     hc_soma: f64,
     bois_nu: i64,
     db: State<DbConnection>,
@@ -53,9 +56,9 @@ pub fn criar_dupla(
     let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     conn.execute(
-        "INSERT INTO duplas (id_cabeceiro, id_pezeiro, numero_bateria, hc_soma, bois_nu)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![id_cabeceiro, id_pezeiro, numero_bateria, hc_soma, bois_nu],
+        "INSERT INTO duplas (id_cabeceiro, id_pezeiro, numero_bateria, inscricao, hc_soma, bois_nu)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![id_cabeceiro, id_pezeiro, numero_bateria, inscricao, hc_soma, bois_nu],
     )
     .map_err(|e| e.to_string())?;
 
@@ -66,6 +69,7 @@ pub fn criar_dupla(
         id_cabeceiro,
         id_pezeiro,
         numero_bateria,
+        inscricao: Some(inscricao),
         hc_soma: Some(hc_soma),
         bois_nu,
         boi_1: None,

@@ -9,6 +9,7 @@ pub fn criar_prova(
     data: String,
     bateria: bool,
     bateria_nu: Option<i64>,
+    categoria: String,
     db: State<DbConnection>,
 ) -> Result<Prova, String> {
     if nome.trim().is_empty() {
@@ -17,12 +18,15 @@ pub fn criar_prova(
     if bateria && bateria_nu.is_none() {
         return Err("Informe a quantidade de baterias.".into());
     }
+    if categoria != "Aberta" && categoria != "Soma" {
+        return Err("Categoria deve ser \"Aberta\" ou \"Soma\".".into());
+    }
 
     let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     conn.execute(
-        "INSERT INTO provas (nome, data, bateria, bateria_nu) VALUES (?1, ?2, ?3, ?4)",
-        params![nome, data, bateria as i64, bateria_nu],
+        "INSERT INTO provas (nome, data, bateria, bateria_nu, categoria) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![nome, data, bateria as i64, bateria_nu, categoria],
     )
     .map_err(|e| e.to_string())?;
 
@@ -34,6 +38,7 @@ pub fn criar_prova(
         data,
         bateria,
         bateria_nu,
+        categoria,
     })
 }
 
@@ -42,7 +47,7 @@ pub fn listar_provas(db: State<DbConnection>) -> Result<Vec<Prova>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     let mut stmt = conn
-        .prepare("SELECT id, nome, data, bateria, bateria_nu FROM provas ORDER BY data DESC")
+        .prepare("SELECT id, nome, data, bateria, bateria_nu, categoria FROM provas ORDER BY data DESC")
         .map_err(|e| e.to_string())?;
 
     let provas = stmt
@@ -53,6 +58,7 @@ pub fn listar_provas(db: State<DbConnection>) -> Result<Vec<Prova>, String> {
                 data: row.get(2)?,
                 bateria: row.get::<_, i64>(3)? != 0,
                 bateria_nu: row.get(4)?,
+                categoria: row.get(5)?,
             })
         })
         .map_err(|e| e.to_string())?

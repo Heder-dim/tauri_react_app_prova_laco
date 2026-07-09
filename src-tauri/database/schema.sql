@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS provas (
     bateria     INTEGER NOT NULL DEFAULT 0      -- boolean: 0 = sem baterias, 1 = com baterias
                     CHECK (bateria IN (0, 1)),
     bateria_nu  INTEGER,                        -- quantidade total de baterias (só relevante quando bateria = 1)
+    categoria   TEXT NOT NULL DEFAULT 'Aberta'
+                    CHECK (categoria IN ('Aberta', 'Soma')),
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
 
@@ -62,6 +64,9 @@ CREATE TABLE IF NOT EXISTS duplas (
     -- Qual bateria essa dupla pertence (relevante quando a prova tem provas.bateria = 1).
     -- Validado na aplicação: deve estar entre 1 e provas.bateria_nu.
     numero_bateria  INTEGER,
+
+    -- Número/código de inscrição da dupla na prova.
+    inscricao       INTEGER,
 
     hc_soma         REAL,                       -- calculado no front-end (hc do cabeceiro + hc do pezeiro)
     bois_nu         INTEGER NOT NULL DEFAULT 0,  -- quantidade de bois que essa dupla deve rodar

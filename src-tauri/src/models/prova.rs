@@ -7,4 +7,5 @@ pub struct Prova {
     pub data: String, // ISO 8601 (YYYY-MM-DD)
     pub bateria: bool,
     pub bateria_nu: Option<i64>,
+    pub categoria: String, // "Aberta" ou "Soma"
 }

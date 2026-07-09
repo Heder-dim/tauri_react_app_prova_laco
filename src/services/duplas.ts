@@ -5,6 +5,7 @@ export interface DuplaDb {
   id_cabeceiro: number;
   id_pezeiro: number;
   numero_bateria: number | null;
+  inscricao: number | null;
   hc_soma: number | null;
   bois_nu: number;
   boi_1: number | null;
@@ -32,6 +33,7 @@ export interface NovaDuplaDb {
   idCabeceiro: number;
   idPezeiro: number;
   numeroBateria?: number | null;
+  inscricao: number;
   hcSoma: number;
   boisNu: number;
 }
@@ -41,6 +43,7 @@ export function criarDupla(nova: NovaDuplaDb): Promise<DuplaDb> {
     idCabeceiro: nova.idCabeceiro,
     idPezeiro: nova.idPezeiro,
     numeroBateria: nova.numeroBateria ?? null,
+    inscricao: nova.inscricao,
     hcSoma: nova.hcSoma,
     boisNu: nova.boisNu,
   });
@@ -88,7 +91,7 @@ export function deletarDupla(id: number): Promise<void> {
   return invoke("deletar_dupla", { id });
 }
 
-// ---- Conversão entre o formato do banco (boi_1..boi_5) e o array `tempos` usado nas tabelas ----
+// ---- Conversão entre o formato do banco (boi_1..boi_6) e o array `tempos` usado nas tabelas ----
 
 export function boisParaTempos(dupla: DuplaDb): (number | null)[] {
   return [dupla.boi_1, dupla.boi_2, dupla.boi_3, dupla.boi_4, dupla.boi_5, dupla.boi_6];

@@ -26,5 +26,12 @@ pub fn init_db(app: &AppHandle) -> Result<Connection, Box<dyn std::error::Error>
     // Ignora o erro se a coluna já existir.
     let _ = conn.execute("ALTER TABLE duplas ADD COLUMN boi_6 REAL", []);
 
+    // Mesma lógica pros campos categoria (provas) e inscricao (duplas).
+    let _ = conn.execute(
+        "ALTER TABLE provas ADD COLUMN categoria TEXT NOT NULL DEFAULT 'Aberta'",
+        [],
+    );
+    let _ = conn.execute("ALTER TABLE duplas ADD COLUMN inscricao INTEGER", []);
+
     Ok(conn)
 }
