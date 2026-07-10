@@ -1,22 +1,26 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Download } from "lucide-react";
+import { Download, Shuffle } from "lucide-react";
 import PageHeader from "../components/layout/page-header";
 import DuplasResultadosTable, {
   type DuplaResultadoRow,
 } from "../components/duplas-resultados/duplas-resultados-table";
 // import RegraBoisPanelEditavel from "../components/duplas-resultados/regra-bois-panel";
+import { sortearInscricoes } from "../lib/sorteio";
 import {
   atualizarDupla,
+  atualizarInscricao,
   boisParaTempos,
   listarDuplasPorProva,
   temposParaBois,
   type DuplaDetalhadaDb,
 } from "../services/duplas";
 
-/** Dupla com o id real do banco — usado só nesta página pra persistir edições */
+/** Dupla com o id real do banco e os ids de cabeceiro/pezeiro — usado só nesta página */
 interface DuplaComId extends DuplaResultadoRow {
   id: number;
+  idCabeceiro: number;
+  idPezeiro: number;
 }
 
 function iniciaisDoNome(nome: string) {
@@ -31,6 +35,8 @@ function paraLinhaDupla(d: DuplaDetalhadaDb, numero: number): DuplaComId {
     id: d.id,
     numero,
     inscricao: d.inscricao ?? 0,
+    idCabeceiro: d.id_cabeceiro,
+    idPezeiro: d.id_pezeiro,
     cabeceiroNome: d.cabeceiro_nome,
     hcCabeceiro: d.hc_cabeceiro,
     pezeiroIniciais: iniciaisDoNome(d.pezeiro_nome),
@@ -53,6 +59,8 @@ export default function DuplasResultadosPage() {
   const [duplas, setDuplas] = useState<DuplaComId[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [intervaloTexto, setIntervaloTexto] = useState("3");
+  const [sorteandoInscricao, setSorteandoInscricao] = useState(false);
 
   useEffect(() => {
     carregarDuplas();
@@ -69,6 +77,49 @@ export default function DuplasResultadosPage() {
       setErro(typeof e === "string" ? e : "Não foi possível carregar as duplas.");
     } finally {
       setCarregando(false);
+    }
+  }
+
+  /**
+   * Sorteia uma nova ordem de inscrição pra todas as duplas já formadas, tentando
+   * respeitar o intervalo mínimo entre corridas do mesmo cabeceiro/pezeiro.
+   */
+  async function handleSortearInscricao() {
+    const intervalo = Number(intervaloTexto);
+    if (!intervaloTexto.trim() || Number.isNaN(intervalo) || intervalo < 0) {
+      setErro("Informe um intervalo válido.");
+      return;
+    }
+    if (duplas.length === 0) return;
+
+    setSorteandoInscricao(true);
+    setErro(null);
+    try {
+      const novaOrdem = sortearInscricoes(
+        duplas.map((d) => ({ id: d.id, idCabeceiro: d.idCabeceiro, idPezeiro: d.idPezeiro })),
+        intervalo
+      );
+
+      // Persiste cada inscrição nova no banco
+      await Promise.all(
+        duplas.map((d) => {
+          const novaInscricao = novaOrdem.get(d.id);
+          if (novaInscricao === undefined) return Promise.resolve();
+          return atualizarInscricao(d.id, novaInscricao);
+        })
+      );
+
+      // Atualiza o estado local já reordenado pela nova inscrição, renumerando o #
+      const atualizado = duplas
+        .map((d) => ({ ...d, inscricao: novaOrdem.get(d.id) ?? d.inscricao }))
+        .sort((a, b) => a.inscricao - b.inscricao)
+        .map((d, i) => ({ ...d, numero: i + 1 }));
+
+      setDuplas(atualizado);
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível sortear a inscrição.");
+    } finally {
+      setSorteandoInscricao(false);
     }
   }
 
@@ -143,10 +194,42 @@ export default function DuplasResultadosPage() {
             <p className="text-sm text-slate-400">Nenhuma dupla formada nessa prova ainda.</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-5 lg:flex-row">
-            <DuplasResultadosTable duplas={duplas} onDuplasChange={handleDuplasChange} />
-            {/* <RegraBoisPanelEditavel /> */}
-          </div>
+          <>
+            <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-white p-4 shadow-sm">
+              <div>
+                <label htmlFor="intervalo" className="mb-1.5 block text-xs text-slate-500">
+                  Intervalo mínimo entre corridas
+                </label>
+                <input
+                  id="intervalo"
+                  type="text"
+                  inputMode="numeric"
+                  value={intervaloTexto}
+                  onChange={(e) => setIntervaloTexto(e.target.value)}
+                  placeholder="Ex: 3"
+                  className="w-24 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleSortearInscricao}
+                disabled={sorteandoInscricao || !intervaloTexto.trim()}
+                className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+              >
+                <Shuffle size={16} />
+                {sorteandoInscricao ? "Sorteando..." : "Sortear Inscrição"}
+              </button>
+              <p className="text-xs text-slate-400">
+                Reembaralha a ordem de inscrição de todas as duplas, respeitando o intervalo
+                sempre que possível.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-5 lg:flex-row">
+              <DuplasResultadosTable duplas={duplas} onDuplasChange={handleDuplasChange} />
+              {/* <RegraBoisPanelEditavel /> */}
+            </div>
+          </>
         )}
       </div>
     </div>

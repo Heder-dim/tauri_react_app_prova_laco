@@ -32,6 +32,7 @@ fn main() {
             commands::duplas::listar_duplas_por_pezeiro,
             commands::duplas::listar_duplas_por_prova,
             commands::duplas::atualizar_dupla,
+            commands::duplas::atualizar_inscricao,
             commands::duplas::deletar_dupla,
         ])
         .run(tauri::generate_context!())

@@ -183,6 +183,19 @@ pub fn atualizar_dupla(
 }
 
 #[tauri::command]
+pub fn atualizar_inscricao(id: i64, inscricao: i64, db: State<DbConnection>) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "UPDATE duplas SET inscricao = ?1, updated_at = datetime('now') WHERE id = ?2",
+        params![inscricao, id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
 pub fn deletar_dupla(id: i64, db: State<DbConnection>) -> Result<(), String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
 

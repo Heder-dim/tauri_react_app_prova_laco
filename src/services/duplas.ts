@@ -91,6 +91,10 @@ export function atualizarDupla(dados: AtualizarDuplaDb): Promise<void> {
   });
 }
 
+export function atualizarInscricao(id: number, inscricao: number): Promise<void> {
+  return invoke("atualizar_inscricao", { id, inscricao });
+}
+
 export function deletarDupla(id: number): Promise<void> {
   return invoke("deletar_dupla", { id });
 }

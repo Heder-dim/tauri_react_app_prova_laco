@@ -45,3 +45,76 @@ export function sortearBalanceado<T>(
 
   return resultado;
 }
+
+export interface DuplaParaSorteioInscricao {
+  id: number;
+  idCabeceiro: number;
+  idPezeiro: number;
+}
+
+/**
+ * Sorteia uma nova ordem de inscrição (1, 2, 3...) pra um conjunto de duplas já formadas,
+ * tentando garantir que cada cabeceiro e cada pezeiro tenham pelo menos `intervaloMinimo`
+ * posições de distância entre uma corrida e a próxima — sempre que for possível.
+ *
+ * A cada posição, sorteia aleatoriamente entre as duplas "elegíveis" (cujo cabeceiro E
+ * pezeiro já esperaram o suficiente). Se ninguém for elegível naquela posição, relaxa a
+ * regra e sorteia entre as duplas que deixam o menor "aperto" possível (best effort).
+ *
+ * Retorna um Map de id da dupla -> nova inscrição.
+ */
+export function sortearInscricoes(
+  duplas: DuplaParaSorteioInscricao[],
+  intervaloMinimo: number
+): Map<number, number> {
+  const pendentes = sortearDistintos(duplas, duplas.length); // embaralha a ordem inicial
+  const posicaoFinal = new Map<number, number>();
+  const ultimaPosicaoCabeceiro: Record<number, number> = {};
+  const ultimaPosicaoPezeiro: Record<number, number> = {};
+
+  let posicao = 1;
+
+  function distancia(mapa: Record<number, number>, id: number) {
+    return mapa[id] !== undefined ? posicao - mapa[id] : Infinity;
+  }
+
+  while (pendentes.length > 0) {
+    const elegiveis = pendentes.filter(
+      (d) =>
+        distancia(ultimaPosicaoCabeceiro, d.idCabeceiro) >= intervaloMinimo &&
+        distancia(ultimaPosicaoPezeiro, d.idPezeiro) >= intervaloMinimo
+    );
+
+    let candidatos = elegiveis;
+
+    if (candidatos.length === 0) {
+      // Ninguém satisfaz o intervalo pedido nessa posição — relaxa pra quem deixa o
+      // menor "aperto" possível (maximiza a menor distância entre cabeceiro/pezeiro).
+      let melhorPontuacao = -Infinity;
+      for (const d of pendentes) {
+        const pontuacao = Math.min(
+          distancia(ultimaPosicaoCabeceiro, d.idCabeceiro),
+          distancia(ultimaPosicaoPezeiro, d.idPezeiro)
+        );
+        if (pontuacao > melhorPontuacao) melhorPontuacao = pontuacao;
+      }
+      candidatos = pendentes.filter(
+        (d) =>
+          Math.min(
+            distancia(ultimaPosicaoCabeceiro, d.idCabeceiro),
+            distancia(ultimaPosicaoPezeiro, d.idPezeiro)
+          ) === melhorPontuacao
+      );
+    }
+
+    const [escolhida] = sortearDistintos(candidatos, 1);
+    pendentes.splice(pendentes.indexOf(escolhida), 1);
+
+    posicaoFinal.set(escolhida.id, posicao);
+    ultimaPosicaoCabeceiro[escolhida.idCabeceiro] = posicao;
+    ultimaPosicaoPezeiro[escolhida.idPezeiro] = posicao;
+    posicao += 1;
+  }
+
+  return posicaoFinal;
+}
