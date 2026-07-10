@@ -4,6 +4,7 @@ import LiveBadge from "../ui/live-badge";
 
 export interface DuplaRow {
   numero: number;
+  inscricao: number;
   pezeiroIniciais: string;
   pezeiroNome: string;
   hcPez: number;
@@ -147,9 +148,10 @@ export default function DuplasTable({
 
       {/* Tabela */}
       <div className="overflow-x-auto">
-        <table className="border-collapse table-fixed text-sm" style={{ width: 1080 }}>
+        <table className="border-collapse table-fixed text-sm" style={{ width: 1144 }}>
           <colgroup>
             <col style={{ width: 40 }} /> {/* # */}
+            <col style={{ width: 64 }} /> {/* Inscrição */}
             <col style={{ width: 160 }} /> {/* Pezeiro */}
             <col style={{ width: 70 }} /> {/* HC Pez. */}
             <col style={{ width: 70 }} /> {/* HC Dupla */}
@@ -169,6 +171,9 @@ export default function DuplasTable({
             <tr>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 #
+              </th>
+              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+                Inscrição
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 Pezeiro
@@ -214,6 +219,9 @@ export default function DuplasTable({
               <tr key={dupla.numero} className="border-b border-slate-50 last:border-0">
                 <td className="px-2 py-3 text-slate-400">
                   {String(dupla.numero).padStart(2, "0")}
+                </td>
+                <td className="px-2 py-3 font-semibold text-slate-700">
+                  {dupla.inscricao}
                 </td>
                 <td className="px-2 py-3">
                   <div className="flex items-center gap-2">

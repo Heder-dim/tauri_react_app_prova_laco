@@ -30,6 +30,7 @@ function paraLinhaDupla(d: DuplaDetalhadaDb, numero: number): DuplaComId {
   return {
     id: d.id,
     numero,
+    inscricao: d.inscricao ?? 0,
     cabeceiroNome: d.cabeceiro_nome,
     hcCabeceiro: d.hc_cabeceiro,
     pezeiroIniciais: iniciaisDoNome(d.pezeiro_nome),

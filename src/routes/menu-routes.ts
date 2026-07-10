@@ -12,7 +12,7 @@ export function routeForLabel(label: MenuLabel, idProva: string | null): string 
   if (label === "Provas" || !idProva) return "/";
 
   switch (label) {
-    case "Dashboard":
+    case "Formar Duplas":
       return `/provas/${idProva}/dashboard`;
     case "Cabeceiros":
       return `/provas/${idProva}/cabeceiros`;
@@ -32,7 +32,7 @@ export function idProvaFromPath(pathname: string): string | null {
 /** Determina qual item do menu deve ficar destacado, a partir do caminho atual */
 export function labelForPath(pathname: string): MenuLabel {
   if (pathname === "/") return "Provas";
-  if (pathname.includes("/dashboard")) return "Dashboard";
+  if (pathname.includes("/dashboard")) return "Formar Duplas";
   if (pathname.includes("/cabeceiros")) return "Cabeceiros";
   if (pathname.includes("/pezeiros")) return "Pezeiros";
   if (pathname.includes("/duplas-resultados")) return "Duplas e Resultados";

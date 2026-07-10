@@ -43,6 +43,27 @@ pub fn criar_prova(
 }
 
 #[tauri::command]
+pub fn buscar_prova(id: i64, db: State<DbConnection>) -> Result<Prova, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+
+    conn.query_row(
+        "SELECT id, nome, data, bateria, bateria_nu, categoria FROM provas WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(Prova {
+                id: row.get(0)?,
+                nome: row.get(1)?,
+                data: row.get(2)?,
+                bateria: row.get::<_, i64>(3)? != 0,
+                bateria_nu: row.get(4)?,
+                categoria: row.get(5)?,
+            })
+        },
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn listar_provas(db: State<DbConnection>) -> Result<Vec<Prova>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
 

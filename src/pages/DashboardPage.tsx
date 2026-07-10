@@ -9,12 +9,15 @@ import CabeceiroSelect from "../components/dashboard/cabeceiro-select";
 import PezeiroSelect, { type PezeiroOption } from "../components/dashboard/pezeiro-select";
 // import RegraBoisPanel from "../components/dashboard/regra-bois-panel";
 import { calcularBoisNu } from "../lib/regras-bois";
+import { sortearBalanceado } from "../lib/sorteio";
+import { type ProvaDb, buscarProva } from "../services/provas";
 import { type CabeceiroDb, listarCabeceirosPorProva } from "../services/cabeceiros";
 import { type PezeiroDb, listarPezeirosPorProva } from "../services/pezeiros";
 import {
   criarDupla,
   atualizarDupla,
   listarDuplasPorCabeceiro,
+  listarDuplasPorProva,
   type DuplaDetalhadaDb,
   boisParaTempos,
   temposParaBois,
@@ -37,6 +40,7 @@ function paraLinhaDupla(d: DuplaDetalhadaDb, numero: number): DuplaComId {
   return {
     id: d.id,
     numero,
+    inscricao: d.inscricao ?? 0,
     idPezeiro: d.id_pezeiro,
     pezeiroIniciais: iniciaisDoNome(d.pezeiro_nome),
     pezeiroNome: d.pezeiro_nome,
@@ -55,34 +59,54 @@ export default function DashboardPage() {
   const { idProva } = useParams<{ idProva: string }>();
   const idProvaNum = Number(idProva);
 
+  const [prova, setProva] = useState<ProvaDb | null>(null);
   const [cabeceiros, setCabeceiros] = useState<CabeceiroDb[]>([]);
   const [pezeiros, setPezeiros] = useState<PezeiroDb[]>([]);
   const [carregandoBase, setCarregandoBase] = useState(true);
 
   const [cabeceiroSelecionadoId, setCabeceiroSelecionadoId] = useState<number | null>(null);
   const [pezeiroSelecionadoId, setPezeiroSelecionadoId] = useState<number | null>(null);
-  const [inscricaoTexto, setInscricaoTexto] = useState("");
+  const [boisNuTexto, setBoisNuTexto] = useState("");
+  const [quantidadeSorteio, setQuantidadeSorteio] = useState("");
+  const [sorteando, setSorteando] = useState(false);
 
   const [duplas, setDuplas] = useState<DuplaComId[]>([]);
   const [carregandoDuplas, setCarregandoDuplas] = useState(false);
 
+  // Estado "da prova inteira" (não só do cabeceiro selecionado) — usado pro sorteio balanceado
+  // e pra saber a próxima inscrição livre, sem precisar rebuscar do banco a cada sorteio.
+  const [corridasPorPezeiro, setCorridasPorPezeiro] = useState<Record<number, number>>({});
+  const [proximaInscricaoDisponivel, setProximaInscricaoDisponivel] = useState(1);
+
   const [erro, setErro] = useState<string | null>(null);
 
-  // Carrega cabeceiros e pezeiros da prova ao montar (ou se o idProva da URL mudar)
+  // Carrega a prova, cabeceiros, pezeiros e um retrato das duplas da prova inteira ao montar
   useEffect(() => {
     async function carregarBase() {
       setCarregandoBase(true);
       setErro(null);
       try {
-        const [cabeceirosDb, pezeirosDb] = await Promise.all([
+        const [provaDb, cabeceirosDb, pezeirosDb, duplasDaProva] = await Promise.all([
+          buscarProva(idProvaNum),
           listarCabeceirosPorProva(idProvaNum),
           listarPezeirosPorProva(idProvaNum),
+          listarDuplasPorProva(idProvaNum),
         ]);
+        setProva(provaDb);
         setCabeceiros(cabeceirosDb);
         setPezeiros(pezeirosDb);
         setCabeceiroSelecionadoId(cabeceirosDb[0]?.id ?? null);
+
+        const contagem: Record<number, number> = {};
+        let maiorInscricao = 0;
+        for (const d of duplasDaProva) {
+          contagem[d.id_pezeiro] = (contagem[d.id_pezeiro] ?? 0) + 1;
+          maiorInscricao = Math.max(maiorInscricao, d.inscricao ?? 0);
+        }
+        setCorridasPorPezeiro(contagem);
+        setProximaInscricaoDisponivel(maiorInscricao + 1);
       } catch (e) {
-        setErro(typeof e === "string" ? e : "Não foi possível carregar cabeceiros e pezeiros.");
+        setErro(typeof e === "string" ? e : "Não foi possível carregar os dados da prova.");
       } finally {
         setCarregandoBase(false);
       }
@@ -118,11 +142,33 @@ export default function DashboardPage() {
     [cabeceiros, cabeceiroSelecionadoId]
   );
 
+  const categoriaAberta = prova?.categoria === "Aberta";
+
   const pezeirosDisponiveis: PezeiroOption[] = useMemo(() => {
     return pezeiros
       .filter((p) => !duplas.some((d) => d.idPezeiro === p.id))
-      .map((p) => ({ id: p.id, nome: p.nome, hc: p.hc, iniciais: iniciaisDoNome(p.nome) }));
-  }, [pezeiros, duplas]);
+      .map((p) => ({
+        id: p.id,
+        nome: p.nome,
+        hc: p.hc,
+        iniciais: iniciaisDoNome(p.nome),
+        corridas: corridasPorPezeiro[p.id] ?? 0,
+      }));
+  }, [pezeiros, duplas, corridasPorPezeiro]);
+
+  // Sugere a quantidade de bois (pela regra) sempre que a dupla escolhida mudar.
+  // Quando a categoria é "Aberta", o usuário ainda pode sobrescrever esse valor antes de formar a dupla.
+  useEffect(() => {
+    if (!cabeceiroSelecionado || pezeiroSelecionadoId === null) {
+      setBoisNuTexto("");
+      return;
+    }
+    const pezeiro = pezeiros.find((p) => p.id === pezeiroSelecionadoId);
+    if (!pezeiro) return;
+
+    const hcSoma = cabeceiroSelecionado.hc + pezeiro.hc;
+    setBoisNuTexto(String(calcularBoisNu(hcSoma)));
+  }, [cabeceiroSelecionado, pezeiroSelecionadoId, pezeiros]);
 
   function handleSelecionarCabeceiro(id: number) {
     setCabeceiroSelecionadoId(id);
@@ -132,28 +178,34 @@ export default function DashboardPage() {
   async function handleFormarDupla() {
     if (!cabeceiroSelecionado || pezeiroSelecionadoId === null) return;
 
-    const inscricao = Number(inscricaoTexto);
-    if (!inscricaoTexto.trim() || Number.isNaN(inscricao)) {
-      setErro("Informe um número de inscrição válido.");
-      return;
-    }
-
     const pezeiro = pezeiros.find((p) => p.id === pezeiroSelecionadoId);
     if (!pezeiro) return;
 
+    const hcSoma = cabeceiroSelecionado.hc + pezeiro.hc;
+    let boisNu = calcularBoisNu(hcSoma);
+
+    if (categoriaAberta) {
+      const boisNuDigitado = Number(boisNuTexto);
+      if (!boisNuTexto.trim() || Number.isNaN(boisNuDigitado) || boisNuDigitado < 1 || boisNuDigitado > 6) {
+        setErro("Informe uma quantidade de bois válida (1 a 6).");
+        return;
+      }
+      boisNu = boisNuDigitado;
+    }
+
     try {
-      const hcSoma = cabeceiroSelecionado.hc + pezeiro.hc;
       const nova = await criarDupla({
         idCabeceiro: cabeceiroSelecionado.id,
         idPezeiro: pezeiro.id,
-        inscricao,
+        inscricao: proximaInscricaoDisponivel,
         hcSoma,
-        boisNu: calcularBoisNu(hcSoma),
+        boisNu,
       });
 
       const novaLinha: DuplaComId = {
         id: nova.id,
         numero: duplas.length + 1,
+        inscricao: nova.inscricao ?? proximaInscricaoDisponivel,
         idPezeiro: pezeiro.id,
         pezeiroIniciais: iniciaisDoNome(pezeiro.nome),
         pezeiroNome: pezeiro.nome,
@@ -168,10 +220,95 @@ export default function DashboardPage() {
       };
 
       setDuplas((prev) => [...prev, novaLinha]);
+      setCorridasPorPezeiro((prev) => ({
+        ...prev,
+        [pezeiro.id]: (prev[pezeiro.id] ?? 0) + 1,
+      }));
+      setProximaInscricaoDisponivel((prev) => prev + 1);
       setPezeiroSelecionadoId(null);
-      setInscricaoTexto("");
     } catch (e) {
       setErro(typeof e === "string" ? e : "Não foi possível formar a dupla.");
+    }
+  }
+
+  /**
+   * Sorteia `quantidade` pezeiros (ainda não pareados com o cabeceiro selecionado),
+   * priorizando quem já correu menos na prova inteira — evita que um pezeiro acumule
+   * muito mais duplas que os outros. A inscrição só incrementa a partir da última usada.
+   */
+  async function handleSortearDuplas() {
+    if (!cabeceiroSelecionado) return;
+
+    const quantidade = Number(quantidadeSorteio);
+    if (!quantidadeSorteio.trim() || Number.isNaN(quantidade) || quantidade < 1) {
+      setErro("Informe uma quantidade válida para o sorteio.");
+      return;
+    }
+
+    const sorteados = sortearBalanceado(
+      pezeirosDisponiveis,
+      quantidade,
+      (p) => p.corridas ?? 0
+    );
+    if (sorteados.length === 0) {
+      setErro("Não há pezeiros disponíveis para sortear.");
+      return;
+    }
+
+    setSorteando(true);
+    setErro(null);
+    try {
+      let proximaInscricao = proximaInscricaoDisponivel;
+      const novasLinhas: DuplaComId[] = [];
+      const novasCorridas: Record<number, number> = {};
+
+      for (const pezeiro of sorteados) {
+        const hcSoma = cabeceiroSelecionado.hc + pezeiro.hc;
+        const boisNu = calcularBoisNu(hcSoma);
+
+        const nova = await criarDupla({
+          idCabeceiro: cabeceiroSelecionado.id,
+          idPezeiro: pezeiro.id,
+          inscricao: proximaInscricao,
+          hcSoma,
+          boisNu,
+        });
+
+        novasLinhas.push({
+          id: nova.id,
+          numero: duplas.length + novasLinhas.length + 1,
+          inscricao: nova.inscricao ?? proximaInscricao,
+          idPezeiro: pezeiro.id,
+          pezeiroIniciais: pezeiro.iniciais,
+          pezeiroNome: pezeiro.nome,
+          hcPez: pezeiro.hc,
+          hcDupla: nova.hc_soma ?? hcSoma,
+          bois: nova.bois_nu,
+          tempos: boisParaTempos(nova),
+          parcial: nova.parcial ?? 0,
+          boiFinal: nova.boi_final ?? 0,
+          media: nova.media ?? 0,
+          paraGanhar: nova.para_ganhar ?? 0,
+        });
+
+        novasCorridas[pezeiro.id] = (novasCorridas[pezeiro.id] ?? 0) + 1;
+        proximaInscricao += 1;
+      }
+
+      setDuplas((prev) => [...prev, ...novasLinhas]);
+      setCorridasPorPezeiro((prev) => {
+        const atualizado = { ...prev };
+        for (const [id, incremento] of Object.entries(novasCorridas)) {
+          atualizado[Number(id)] = (atualizado[Number(id)] ?? 0) + incremento;
+        }
+        return atualizado;
+      });
+      setProximaInscricaoDisponivel(proximaInscricao);
+      setQuantidadeSorteio("");
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível sortear as duplas.");
+    } finally {
+      setSorteando(false);
     }
   }
 
@@ -284,17 +421,21 @@ export default function DashboardPage() {
                 />
 
                 <div className="mt-2.5">
-                  <label htmlFor="inscricao" className="mb-1.5 block text-xs text-slate-500">
-                    Nº de Inscrição
+                  <label htmlFor="bois-nu" className="mb-1.5 block text-xs text-slate-500">
+                    Qtd. de Bois{" "}
+                    {!categoriaAberta && (
+                      <span className="text-slate-400">(definida pela regra de HC)</span>
+                    )}
                   </label>
                   <input
-                    id="inscricao"
+                    id="bois-nu"
                     type="text"
                     inputMode="numeric"
-                    value={inscricaoTexto}
-                    onChange={(e) => setInscricaoTexto(e.target.value)}
-                    placeholder="Ex: 101"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                    value={boisNuTexto}
+                    onChange={(e) => setBoisNuTexto(e.target.value)}
+                    disabled={!categoriaAberta}
+                    placeholder="—"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:text-slate-400"
                   />
                 </div>
 
@@ -302,21 +443,38 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={handleFormarDupla}
-                    disabled={
-                      !cabeceiroSelecionado || pezeiroSelecionadoId === null || !inscricaoTexto.trim()
-                    }
+                    disabled={!cabeceiroSelecionado || pezeiroSelecionadoId === null}
                     className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
                   >
                     <UserPlus size={16} />
                     Formar Dupla
                   </button>
-                  <button
-                    type="button"
-                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
-                  >
-                    <Dices size={16} />
-                    Sortear Duplas
-                  </button>
+                </div>
+
+                <div className="mt-4 border-t border-slate-100 pt-3">
+                  <label htmlFor="qtd-sorteio" className="mb-1.5 block text-xs text-slate-500">
+                    Sortear parceiros (quantidade)
+                  </label>
+                  <div className="flex gap-2.5">
+                    <input
+                      id="qtd-sorteio"
+                      type="text"
+                      inputMode="numeric"
+                      value={quantidadeSorteio}
+                      onChange={(e) => setQuantidadeSorteio(e.target.value)}
+                      placeholder="Ex: 5"
+                      className="w-24 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSortearDuplas}
+                      disabled={!cabeceiroSelecionado || sorteando || !quantidadeSorteio.trim()}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                    >
+                      <Dices size={16} />
+                      {sorteando ? "Sorteando..." : "Sortear Duplas"}
+                    </button>
+                  </div>
                 </div>
               </div>
 

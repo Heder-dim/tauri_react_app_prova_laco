@@ -7,6 +7,8 @@ export interface PezeiroOption {
   nome: string;
   hc: number;
   iniciais: string;
+  /** Quantas duplas esse pezeiro já tem na prova inteira — ajuda a balancear na hora de escolher manualmente */
+  corridas?: number;
 }
 
 export interface PezeiroSelectProps {
@@ -39,6 +41,9 @@ export default function PezeiroSelect({
             <span className="rounded-md bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-600">
               HC {selecionado.hc.toFixed(1).replace(".", ",")}
             </span>
+            {selecionado.corridas !== undefined && (
+              <span className="text-xs text-slate-400">{selecionado.corridas}x</span>
+            )}
           </div>
         ) : (
           <span className="text-sm text-slate-400">
@@ -79,6 +84,11 @@ export default function PezeiroSelect({
                   <span className="ml-auto rounded-md bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-600">
                     HC {pezeiro.hc.toFixed(1).replace(".", ",")}
                   </span>
+                  {pezeiro.corridas !== undefined && (
+                    <span className="w-6 shrink-0 text-right text-xs text-slate-400">
+                      {pezeiro.corridas}x
+                    </span>
+                  )}
                 </button>
               </li>
             ))}

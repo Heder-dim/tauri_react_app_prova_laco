@@ -38,6 +38,10 @@ export function listarProvas(): Promise<ProvaDb[]> {
   return invoke("listar_provas");
 }
 
+export function buscarProva(id: number): Promise<ProvaDb> {
+  return invoke("buscar_prova", { id });
+}
+
 export function deletarProva(id: number): Promise<void> {
   return invoke("deletar_prova", { id });
 }

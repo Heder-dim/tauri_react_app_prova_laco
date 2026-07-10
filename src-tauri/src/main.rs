@@ -1,8 +1,5 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
-// Se seu `npm run tauri init` já gerou um main.rs, funda este conteúdo com o que já existe
-// (mantendo o `#![cfg_attr(...)]` do topo, se houver).
 // Se seu `npm run tauri init` já gerou um main.rs, funda este conteúdo com o que já existe
 // (mantendo o `#![cfg_attr(...)]` do topo, se houver).
 
@@ -24,6 +21,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::provas::criar_prova,
             commands::provas::listar_provas,
+            commands::provas::buscar_prova,
             commands::provas::deletar_prova,
             commands::cabeceiros::criar_cabeceiro,
             commands::cabeceiros::listar_cabeceiros_por_prova,
