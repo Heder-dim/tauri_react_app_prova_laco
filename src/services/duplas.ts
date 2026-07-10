@@ -53,6 +53,10 @@ export function listarDuplasPorCabeceiro(idCabeceiro: number): Promise<DuplaDeta
   return invoke("listar_duplas_por_cabeceiro", { idCabeceiro });
 }
 
+export function listarDuplasPorPezeiro(idPezeiro: number): Promise<DuplaDetalhadaDb[]> {
+  return invoke("listar_duplas_por_pezeiro", { idPezeiro });
+}
+
 export function listarDuplasPorProva(idProva: number): Promise<DuplaDetalhadaDb[]> {
   return invoke("listar_duplas_por_prova", { idProva });
 }

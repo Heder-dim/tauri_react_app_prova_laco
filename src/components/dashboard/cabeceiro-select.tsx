@@ -6,6 +6,8 @@ export interface CabeceiroOption {
   id: number;
   nome: string;
   hc: number;
+  /** Quantas duplas esse cabeceiro já tem na prova inteira — ajuda a balancear na escolha manual */
+  corridas?: number;
 }
 
 export interface CabeceiroSelectProps {
@@ -45,6 +47,9 @@ export default function CabeceiroSelect({
             <span className="rounded-md bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-600">
               HC {selecionado.hc.toFixed(1).replace(".", ",")}
             </span>
+            {selecionado.corridas !== undefined && (
+              <span className="text-xs text-slate-400">{selecionado.corridas}x</span>
+            )}
           </div>
         ) : (
           <span className="text-sm text-slate-400">Selecione um cabeceiro</span>
@@ -84,6 +89,11 @@ export default function CabeceiroSelect({
                   <span className="ml-auto rounded-md bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-600">
                     HC {cabeceiro.hc.toFixed(1).replace(".", ",")}
                   </span>
+                  {cabeceiro.corridas !== undefined && (
+                    <span className="w-6 shrink-0 text-right text-xs text-slate-400">
+                      {cabeceiro.corridas}x
+                    </span>
+                  )}
                 </button>
               </li>
             ))}

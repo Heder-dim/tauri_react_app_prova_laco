@@ -106,6 +106,26 @@ pub fn listar_duplas_por_cabeceiro(
     Ok(duplas)
 }
 
+/// Usado na tela de Dashboard (modo "por Pezeiro") — duplas de um pezeiro específico.
+#[tauri::command]
+pub fn listar_duplas_por_pezeiro(
+    id_pezeiro: i64,
+    db: State<DbConnection>,
+) -> Result<Vec<DuplaDetalhada>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+
+    let sql = format!("{SELECT_DUPLA_DETALHADA} WHERE duplas.id_pezeiro = ?1 ORDER BY duplas.id");
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+
+    let duplas = stmt
+        .query_map(params![id_pezeiro], map_dupla_detalhada)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(duplas)
+}
+
 /// Usado na tela de Duplas e Resultados — todas as duplas de todos os cabeceiros de uma prova.
 #[tauri::command]
 pub fn listar_duplas_por_prova(

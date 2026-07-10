@@ -1,5 +1,3 @@
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 // Se seu `npm run tauri init` já gerou um main.rs, funda este conteúdo com o que já existe
 // (mantendo o `#![cfg_attr(...)]` do topo, se houver).
 
@@ -31,6 +29,7 @@ fn main() {
             commands::pezeiros::deletar_pezeiro,
             commands::duplas::criar_dupla,
             commands::duplas::listar_duplas_por_cabeceiro,
+            commands::duplas::listar_duplas_por_pezeiro,
             commands::duplas::listar_duplas_por_prova,
             commands::duplas::atualizar_dupla,
             commands::duplas::deletar_dupla,
