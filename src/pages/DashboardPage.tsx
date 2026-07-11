@@ -208,7 +208,8 @@ export default function DashboardPage() {
           modo === "cabeceiro"
             ? await listarDuplasPorCabeceiro(entidadeFixaId!)
             : await listarDuplasPorPezeiro(entidadeFixaId!);
-        setDuplas(dados.map((d, i) => paraDuplaGenerica(d, i + 1)));
+        const ordenados = [...dados].sort((a, b) => (a.inscricao ?? 0) - (b.inscricao ?? 0));
+        setDuplas(ordenados.map((d, i) => paraDuplaGenerica(d, i + 1)));
       } catch (e) {
         setErro(typeof e === "string" ? e : "Não foi possível carregar as duplas.");
       } finally {
