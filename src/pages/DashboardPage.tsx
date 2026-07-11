@@ -1,59 +1,522 @@
-import { ChevronDown, Download, Dices, UserPlus, BarChart3 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
+import { Download, Dices, UserPlus, BarChart3, Users } from "lucide-react";
 import PageHeader from "../components/layout/page-header";
 import StepBadge from "../components/ui/step-badge";
 import StatBox from "../components/ui/stat-box";
 import DuplasTable, { type DuplaRow } from "../components/dashboard/duplas-table";
+import DuplasPorPezeiroTable, {
+  type DuplaPorPezeiroRow,
+} from "../components/dashboard/duplas-por-pezeiro-table";
+import CabeceiroSelect, { type CabeceiroOption } from "../components/dashboard/cabeceiro-select";
+import PezeiroSelect, { type PezeiroOption } from "../components/dashboard/pezeiro-select";
 // import RegraBoisPanel from "../components/dashboard/regra-bois-panel";
+import { calcularBoisNu } from "../lib/regras-bois";
+import { sortearBalanceado } from "../lib/sorteio";
+import { type ProvaDb, buscarProva } from "../services/provas";
+import { type CabeceiroDb, listarCabeceirosPorProva } from "../services/cabeceiros";
+import { type PezeiroDb, listarPezeirosPorProva } from "../services/pezeiros";
+import {
+  criarDupla,
+  atualizarDupla,
+  listarDuplasPorCabeceiro,
+  listarDuplasPorPezeiro,
+  listarDuplasPorProva,
+  type DuplaDetalhadaDb,
+  boisParaTempos,
+  temposParaBois,
+} from "../services/duplas";
 
-// Dados de exemplo — substituir pela consulta real (SQLite) quando a lógica for implementada
-const DUPLAS_EXEMPLO: DuplaRow[] = [
-  {
-    numero: 1,
-    pezeiroIniciais: "CM",
-    pezeiroNome: "Carlos Mendes",
-    hcPez: 2.5,
-    hcDupla: 4.5,
-    bois: 2,
-    tempos: [9.234, 8.876, null, null, null],
-    parcial: 18.11,
-    boiFinal: 8.876,
-    media: 9.234,
-    paraGanhar: 6.986,
-  },
-  {
-    numero: 2,
-    pezeiroIniciais: "RL",
-    pezeiroNome: "Rafael Lima",
-    hcPez: 3.0,
-    hcDupla: 5.0,
-    bois: 2,
-    tempos: [10.123, 9.876, null, null, null],
-    parcial: 19.999,
-    boiFinal: 9.876,
-    media: 10.123,
-    paraGanhar: 6.986,
-  },
-  {
-    numero: 3,
-    pezeiroIniciais: "MS",
-    pezeiroNome: "Marcos Souza",
-    hcPez: 2.0,
-    hcDupla: 4.0,
-    bois: 1,
-    tempos: [8.543, null, null, null, null],
-    parcial: 8.543,
-    boiFinal: 8.543,
-    media: 8.543,
-    paraGanhar: 6.986,
-  },
-];
+type Modo = "cabeceiro" | "pezeiro";
+
+/**
+ * Representação única de uma dupla, guardando os dois lados (cabeceiro e pezeiro)
+ * independente do modo — permite que a mesma lógica de formar/sortear/editar sirva
+ * pros dois fluxos, só trocando qual tabela é usada pra exibir.
+ */
+interface DuplaGenerica {
+  id: number;
+  numero: number;
+  inscricao: number;
+  idCabeceiro: number;
+  cabeceiroIniciais: string;
+  cabeceiroNome: string;
+  hcCabeceiro: number;
+  idPezeiro: number;
+  pezeiroIniciais: string;
+  pezeiroNome: string;
+  hcPezeiro: number;
+  hcDupla: number;
+  bois: number;
+  tempos: (number | null)[];
+  parcial: number;
+  boiFinal: number;
+  media: number;
+  paraGanhar: number;
+}
+
+function iniciaisDoNome(nome: string) {
+  const partes = nome.trim().split(/\s+/);
+  const primeira = partes[0]?.[0] ?? "";
+  const ultima = partes.length > 1 ? partes[partes.length - 1][0] : "";
+  return (primeira + ultima).toUpperCase();
+}
+
+function paraDuplaGenerica(d: DuplaDetalhadaDb, numero: number): DuplaGenerica {
+  return {
+    id: d.id,
+    numero,
+    inscricao: d.inscricao ?? 0,
+    idCabeceiro: d.id_cabeceiro,
+    cabeceiroIniciais: iniciaisDoNome(d.cabeceiro_nome),
+    cabeceiroNome: d.cabeceiro_nome,
+    hcCabeceiro: d.hc_cabeceiro,
+    idPezeiro: d.id_pezeiro,
+    pezeiroIniciais: iniciaisDoNome(d.pezeiro_nome),
+    pezeiroNome: d.pezeiro_nome,
+    hcPezeiro: d.hc_pezeiro,
+    hcDupla: d.hc_soma ?? d.hc_cabeceiro + d.hc_pezeiro,
+    bois: d.bois_nu,
+    tempos: boisParaTempos(d),
+    parcial: d.parcial ?? 0,
+    boiFinal: d.boi_final ?? 0,
+    media: d.media ?? 0,
+    paraGanhar: d.para_ganhar ?? 0,
+  };
+}
+
+/** Recorta a DuplaGenerica pros campos que a DuplasTable (modo Cabeceiro) espera */
+function paraDuplaRow(d: DuplaGenerica): DuplaRow {
+  return {
+    numero: d.numero,
+    inscricao: d.inscricao,
+    pezeiroIniciais: d.pezeiroIniciais,
+    pezeiroNome: d.pezeiroNome,
+    hcPez: d.hcPezeiro,
+    hcDupla: d.hcDupla,
+    bois: d.bois,
+    tempos: d.tempos,
+    parcial: d.parcial,
+    boiFinal: d.boiFinal,
+    media: d.media,
+    paraGanhar: d.paraGanhar,
+    // Campo "invisível" pro tipo, mas sobrevive em tempo de execução (a tabela só espalha os objetos).
+    // Usado em handleDuplasChange pra saber qual dupla no banco foi editada.
+    ...({ id: d.id } as unknown as {}),
+  };
+}
+
+/** Recorta a DuplaGenerica pros campos que a DuplasPorPezeiroTable (modo Pezeiro) espera */
+function paraDuplaPorPezeiroRow(d: DuplaGenerica): DuplaPorPezeiroRow {
+  return {
+    numero: d.numero,
+    inscricao: d.inscricao,
+    cabeceiroIniciais: d.cabeceiroIniciais,
+    cabeceiroNome: d.cabeceiroNome,
+    hcCabeceiro: d.hcCabeceiro,
+    hcDupla: d.hcDupla,
+    bois: d.bois,
+    tempos: d.tempos,
+    parcial: d.parcial,
+    boiFinal: d.boiFinal,
+    media: d.media,
+    paraGanhar: d.paraGanhar,
+    ...({ id: d.id } as unknown as {}),
+  };
+}
 
 export default function DashboardPage() {
+  const { idProva } = useParams<{ idProva: string }>();
+  const idProvaNum = Number(idProva);
+
+  const [modo, setModo] = useState<Modo>("cabeceiro");
+
+  const [prova, setProva] = useState<ProvaDb | null>(null);
+  const [cabeceiros, setCabeceiros] = useState<CabeceiroDb[]>([]);
+  const [pezeiros, setPezeiros] = useState<PezeiroDb[]>([]);
+  const [carregandoBase, setCarregandoBase] = useState(true);
+
+  // Id da entidade "fixa" na tela (o cabeceiro selecionado, no modo Cabeceiro; o pezeiro, no modo Pezeiro)
+  const [entidadeFixaId, setEntidadeFixaId] = useState<number | null>(null);
+  // Id do "parceiro" escolhido manualmente (pezeiro no modo Cabeceiro; cabeceiro no modo Pezeiro)
+  const [parceiroId, setParceiroId] = useState<number | null>(null);
+
+  const [boisNuTexto, setBoisNuTexto] = useState("");
+  const [quantidadeSorteio, setQuantidadeSorteio] = useState("");
+  const [sorteando, setSorteando] = useState(false);
+
+  const [duplas, setDuplas] = useState<DuplaGenerica[]>([]);
+  const [carregandoDuplas, setCarregandoDuplas] = useState(false);
+
+  // Estado "da prova inteira" — usado pro sorteio balanceado e pra saber a próxima inscrição livre.
+  const [corridasPorCabeceiro, setCorridasPorCabeceiro] = useState<Record<number, number>>({});
+  const [corridasPorPezeiro, setCorridasPorPezeiro] = useState<Record<number, number>>({});
+  const [proximaInscricaoDisponivel, setProximaInscricaoDisponivel] = useState(1);
+
+  const [erro, setErro] = useState<string | null>(null);
+
+  // Carrega a prova, cabeceiros, pezeiros e um retrato das duplas da prova inteira ao montar
+  useEffect(() => {
+    async function carregarBase() {
+      setCarregandoBase(true);
+      setErro(null);
+      try {
+        const [provaDb, cabeceirosDb, pezeirosDb, duplasDaProva] = await Promise.all([
+          buscarProva(idProvaNum),
+          listarCabeceirosPorProva(idProvaNum),
+          listarPezeirosPorProva(idProvaNum),
+          listarDuplasPorProva(idProvaNum),
+        ]);
+        setProva(provaDb);
+        setCabeceiros(cabeceirosDb);
+        setPezeiros(pezeirosDb);
+        setEntidadeFixaId(cabeceirosDb[0]?.id ?? null);
+
+        const porCabeceiro: Record<number, number> = {};
+        const porPezeiro: Record<number, number> = {};
+        let maiorInscricao = 0;
+        for (const d of duplasDaProva) {
+          porCabeceiro[d.id_cabeceiro] = (porCabeceiro[d.id_cabeceiro] ?? 0) + 1;
+          porPezeiro[d.id_pezeiro] = (porPezeiro[d.id_pezeiro] ?? 0) + 1;
+          maiorInscricao = Math.max(maiorInscricao, d.inscricao ?? 0);
+        }
+        setCorridasPorCabeceiro(porCabeceiro);
+        setCorridasPorPezeiro(porPezeiro);
+        setProximaInscricaoDisponivel(maiorInscricao + 1);
+      } catch (e) {
+        setErro(typeof e === "string" ? e : "Não foi possível carregar os dados da prova.");
+      } finally {
+        setCarregandoBase(false);
+      }
+    }
+    carregarBase();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idProvaNum]);
+
+  // Carrega as duplas da entidade fixa sempre que ela OU o modo mudar
+  useEffect(() => {
+    if (entidadeFixaId === null) {
+      setDuplas([]);
+      return;
+    }
+
+    async function carregarDuplas() {
+      setCarregandoDuplas(true);
+      setErro(null);
+      try {
+        const dados =
+          modo === "cabeceiro"
+            ? await listarDuplasPorCabeceiro(entidadeFixaId!)
+            : await listarDuplasPorPezeiro(entidadeFixaId!);
+        const ordenados = [...dados].sort((a, b) => (a.inscricao ?? 0) - (b.inscricao ?? 0));
+        setDuplas(ordenados.map((d, i) => paraDuplaGenerica(d, i + 1)));
+      } catch (e) {
+        setErro(typeof e === "string" ? e : "Não foi possível carregar as duplas.");
+      } finally {
+        setCarregandoDuplas(false);
+      }
+    }
+    carregarDuplas();
+  }, [entidadeFixaId, modo]);
+
+  const categoriaAberta = prova?.categoria === "Aberta";
+
+  /** A entidade fixa da tela, seja ela um cabeceiro ou um pezeiro, com formato comum {id, nome, hc} */
+  const entidadeFixa = useMemo(() => {
+    if (entidadeFixaId === null) return null;
+    if (modo === "cabeceiro") return cabeceiros.find((c) => c.id === entidadeFixaId) ?? null;
+    return pezeiros.find((p) => p.id === entidadeFixaId) ?? null;
+  }, [modo, entidadeFixaId, cabeceiros, pezeiros]);
+
+  // Opções pro dropdown do Card 1 (escolher a entidade fixa) — todos os cabeceiros ou todos os pezeiros
+  const cabeceirosParaSelecionar: CabeceiroOption[] = useMemo(
+    () =>
+      cabeceiros.map((c) => ({ id: c.id, nome: c.nome, hc: c.hc, corridas: corridasPorCabeceiro[c.id] ?? 0 })),
+    [cabeceiros, corridasPorCabeceiro]
+  );
+  const pezeirosParaSelecionar: PezeiroOption[] = useMemo(
+    () =>
+      pezeiros.map((p) => ({
+        id: p.id,
+        nome: p.nome,
+        hc: p.hc,
+        iniciais: iniciaisDoNome(p.nome),
+        corridas: corridasPorPezeiro[p.id] ?? 0,
+      })),
+    [pezeiros, corridasPorPezeiro]
+  );
+
+  // Opções pro dropdown do Card 2 (escolher o parceiro) — filtra quem já está pareado com a entidade fixa
+  const cabeceirosDisponiveis: CabeceiroOption[] = useMemo(() => {
+    return cabeceiros
+      .filter((c) => !duplas.some((d) => d.idCabeceiro === c.id))
+      .map((c) => ({ id: c.id, nome: c.nome, hc: c.hc, corridas: corridasPorCabeceiro[c.id] ?? 0 }));
+  }, [cabeceiros, duplas, corridasPorCabeceiro]);
+
+  const pezeirosDisponiveis: PezeiroOption[] = useMemo(() => {
+    return pezeiros
+      .filter((p) => !duplas.some((d) => d.idPezeiro === p.id))
+      .map((p) => ({
+        id: p.id,
+        nome: p.nome,
+        hc: p.hc,
+        iniciais: iniciaisDoNome(p.nome),
+        corridas: corridasPorPezeiro[p.id] ?? 0,
+      }));
+  }, [pezeiros, duplas, corridasPorPezeiro]);
+
+  // Sugere a quantidade de bois (pela regra) sempre que a dupla escolhida mudar.
+  useEffect(() => {
+    if (!entidadeFixa || parceiroId === null) {
+      setBoisNuTexto("");
+      return;
+    }
+    const parceiro =
+      modo === "cabeceiro" ? pezeiros.find((p) => p.id === parceiroId) : cabeceiros.find((c) => c.id === parceiroId);
+    if (!parceiro) return;
+
+    const hcSoma = entidadeFixa.hc + parceiro.hc;
+    setBoisNuTexto(String(calcularBoisNu(hcSoma)));
+  }, [entidadeFixa, parceiroId, modo, pezeiros, cabeceiros]);
+
+  function handleTrocarModo(novoModo: Modo) {
+    setModo(novoModo);
+    setEntidadeFixaId(novoModo === "cabeceiro" ? cabeceiros[0]?.id ?? null : pezeiros[0]?.id ?? null);
+    setParceiroId(null);
+  }
+
+  function handleSelecionarEntidadeFixa(id: number) {
+    setEntidadeFixaId(id);
+    setParceiroId(null); // troca invalida o parceiro selecionado
+  }
+
+  async function handleFormarDupla() {
+    if (!entidadeFixa || parceiroId === null) return;
+
+    const parceiro =
+      modo === "cabeceiro" ? pezeiros.find((p) => p.id === parceiroId) : cabeceiros.find((c) => c.id === parceiroId);
+    if (!parceiro) return;
+
+    const hcSoma = entidadeFixa.hc + parceiro.hc;
+    let boisNu = calcularBoisNu(hcSoma);
+
+    if (categoriaAberta) {
+      const boisNuDigitado = Number(boisNuTexto);
+      if (!boisNuTexto.trim() || Number.isNaN(boisNuDigitado) || boisNuDigitado < 1 || boisNuDigitado > 6) {
+        setErro("Informe uma quantidade de bois válida (1 a 6).");
+        return;
+      }
+      boisNu = boisNuDigitado;
+    }
+
+    const idCabeceiro = modo === "cabeceiro" ? entidadeFixa.id : parceiro.id;
+    const idPezeiro = modo === "cabeceiro" ? parceiro.id : entidadeFixa.id;
+
+    try {
+      const nova = await criarDupla({
+        idCabeceiro,
+        idPezeiro,
+        inscricao: proximaInscricaoDisponivel,
+        hcSoma,
+        boisNu,
+      });
+
+      const cabeceiroEnvolvido = modo === "cabeceiro" ? entidadeFixa : parceiro;
+      const pezeiroEnvolvido = modo === "cabeceiro" ? parceiro : entidadeFixa;
+
+      const novaLinha: DuplaGenerica = {
+        id: nova.id,
+        numero: duplas.length + 1,
+        inscricao: nova.inscricao ?? proximaInscricaoDisponivel,
+        idCabeceiro,
+        cabeceiroIniciais: iniciaisDoNome(cabeceiroEnvolvido.nome),
+        cabeceiroNome: cabeceiroEnvolvido.nome,
+        hcCabeceiro: cabeceiroEnvolvido.hc,
+        idPezeiro,
+        pezeiroIniciais: iniciaisDoNome(pezeiroEnvolvido.nome),
+        pezeiroNome: pezeiroEnvolvido.nome,
+        hcPezeiro: pezeiroEnvolvido.hc,
+        hcDupla: nova.hc_soma ?? hcSoma,
+        bois: nova.bois_nu,
+        tempos: boisParaTempos(nova),
+        parcial: nova.parcial ?? 0,
+        boiFinal: nova.boi_final ?? 0,
+        media: nova.media ?? 0,
+        paraGanhar: nova.para_ganhar ?? 0,
+      };
+
+      setDuplas((prev) => [...prev, novaLinha]);
+      setCorridasPorCabeceiro((prev) => ({ ...prev, [idCabeceiro]: (prev[idCabeceiro] ?? 0) + 1 }));
+      setCorridasPorPezeiro((prev) => ({ ...prev, [idPezeiro]: (prev[idPezeiro] ?? 0) + 1 }));
+      setProximaInscricaoDisponivel((prev) => prev + 1);
+      setParceiroId(null);
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível formar a dupla.");
+    }
+  }
+
+  /**
+   * Sorteia `quantidade` parceiros (pezeiros no modo Cabeceiro; cabeceiros no modo Pezeiro),
+   * priorizando quem já correu menos na prova inteira. A inscrição só incrementa a partir da última usada.
+   */
+  async function handleSortearDuplas() {
+    if (!entidadeFixa) return;
+
+    const quantidade = Number(quantidadeSorteio);
+    if (!quantidadeSorteio.trim() || Number.isNaN(quantidade) || quantidade < 1) {
+      setErro("Informe uma quantidade válida para o sorteio.");
+      return;
+    }
+
+    const opcoesParceiro = modo === "cabeceiro" ? pezeirosDisponiveis : cabeceirosDisponiveis;
+
+    const sorteados = sortearBalanceado(opcoesParceiro, quantidade, (p) => p.corridas ?? 0);
+    if (sorteados.length === 0) {
+      setErro(
+        modo === "cabeceiro"
+          ? "Não há pezeiros disponíveis para sortear."
+          : "Não há cabeceiros disponíveis para sortear."
+      );
+      return;
+    }
+
+    setSorteando(true);
+    setErro(null);
+    try {
+      let proximaInscricao = proximaInscricaoDisponivel;
+      const novasLinhas: DuplaGenerica[] = [];
+      const novasCorridasCabeceiro: Record<number, number> = {};
+      const novasCorridasPezeiro: Record<number, number> = {};
+
+      for (const parceiro of sorteados) {
+        const hcSoma = entidadeFixa.hc + parceiro.hc;
+        const boisNu = calcularBoisNu(hcSoma);
+
+        const idCabeceiro = modo === "cabeceiro" ? entidadeFixa.id : parceiro.id;
+        const idPezeiro = modo === "cabeceiro" ? parceiro.id : entidadeFixa.id;
+
+        const nova = await criarDupla({
+          idCabeceiro,
+          idPezeiro,
+          inscricao: proximaInscricao,
+          hcSoma,
+          boisNu,
+        });
+
+        const cabeceiroEnvolvido = modo === "cabeceiro" ? entidadeFixa : parceiro;
+        const pezeiroEnvolvido = modo === "cabeceiro" ? parceiro : entidadeFixa;
+
+        novasLinhas.push({
+          id: nova.id,
+          numero: duplas.length + novasLinhas.length + 1,
+          inscricao: nova.inscricao ?? proximaInscricao,
+          idCabeceiro,
+          cabeceiroIniciais: iniciaisDoNome(cabeceiroEnvolvido.nome),
+          cabeceiroNome: cabeceiroEnvolvido.nome,
+          hcCabeceiro: cabeceiroEnvolvido.hc,
+          idPezeiro,
+          pezeiroIniciais: iniciaisDoNome(pezeiroEnvolvido.nome),
+          pezeiroNome: pezeiroEnvolvido.nome,
+          hcPezeiro: pezeiroEnvolvido.hc,
+          hcDupla: nova.hc_soma ?? hcSoma,
+          bois: nova.bois_nu,
+          tempos: boisParaTempos(nova),
+          parcial: nova.parcial ?? 0,
+          boiFinal: nova.boi_final ?? 0,
+          media: nova.media ?? 0,
+          paraGanhar: nova.para_ganhar ?? 0,
+        });
+
+        novasCorridasCabeceiro[idCabeceiro] = (novasCorridasCabeceiro[idCabeceiro] ?? 0) + 1;
+        novasCorridasPezeiro[idPezeiro] = (novasCorridasPezeiro[idPezeiro] ?? 0) + 1;
+        proximaInscricao += 1;
+      }
+
+      setDuplas((prev) => [...prev, ...novasLinhas]);
+      setCorridasPorCabeceiro((prev) => {
+        const atualizado = { ...prev };
+        for (const [id, inc] of Object.entries(novasCorridasCabeceiro)) {
+          atualizado[Number(id)] = (atualizado[Number(id)] ?? 0) + inc;
+        }
+        return atualizado;
+      });
+      setCorridasPorPezeiro((prev) => {
+        const atualizado = { ...prev };
+        for (const [id, inc] of Object.entries(novasCorridasPezeiro)) {
+          atualizado[Number(id)] = (atualizado[Number(id)] ?? 0) + inc;
+        }
+        return atualizado;
+      });
+      setProximaInscricaoDisponivel(proximaInscricao);
+      setQuantidadeSorteio("");
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível sortear as duplas.");
+    } finally {
+      setSorteando(false);
+    }
+  }
+
+  /** Compartilhado pelas duas tabelas — o `id` sobrevive em tempo de execução mesmo fora do tipo declarado */
+  function handleDuplasChange(atualizado: (DuplaRow | DuplaPorPezeiroRow)[]) {
+    const comId = atualizado as unknown as Array<{
+      id: number;
+      tempos: (number | null)[];
+      boiFinal: number;
+      parcial: number;
+      media: number;
+    }>;
+
+    setDuplas((prev) => {
+      const porId = new Map(comId.map((d) => [d.id, d]));
+
+      const novoEstado = prev.map((dupla) => {
+        const novo = porId.get(dupla.id);
+        if (!novo) return dupla;
+        return { ...dupla, tempos: novo.tempos, boiFinal: novo.boiFinal, parcial: novo.parcial, media: novo.media };
+      });
+
+      for (const dupla of novoEstado) {
+        const original = prev.find((d) => d.id === dupla.id);
+        if (!original) continue;
+
+        const mudou =
+          original.boiFinal !== dupla.boiFinal ||
+          original.parcial !== dupla.parcial ||
+          original.media !== dupla.media ||
+          original.tempos.some((t, idx) => t !== dupla.tempos[idx]);
+
+        if (!mudou) continue;
+
+        const { boi1, boi2, boi3, boi4, boi5, boi6 } = temposParaBois(dupla.tempos);
+        atualizarDupla({
+          id: dupla.id,
+          boi1,
+          boi2,
+          boi3,
+          boi4,
+          boi5,
+          boi6,
+          parcial: dupla.parcial,
+          boiFinal: dupla.boiFinal,
+          media: dupla.media,
+          paraGanhar: dupla.paraGanhar,
+        }).catch((e) => {
+          setErro(typeof e === "string" ? e : "Não foi possível salvar a alteração.");
+        });
+      }
+
+      return novoEstado;
+    });
+  }
+
+  const tituloParceiro = modo === "cabeceiro" ? "Pezeiro" : "Cabeceiro";
+  const tituloFixo = modo === "cabeceiro" ? "Cabeceiro" : "Pezeiro";
+
   return (
     <div className="-m-6 min-h-screen bg-slate-50 lg:-m-10">
       <PageHeader
         title="Dashboard"
-        subtitle="Selecione um cabeceiro para montar as duplas com todos os pezeiros"
+        subtitle="Selecione um cabeceiro ou pezeiro para montar as duplas"
         action={
           <button className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700">
             <Download size={16} />
@@ -63,80 +526,205 @@ export default function DashboardPage() {
       />
 
       <div className="space-y-5 p-6 lg:p-10">
-        {/* Linha 1 — Seleção de cabeceiro / dupla / resumo */}
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-          {/* Card 1 — Selecionar Cabeceiro */}
-          <div className="rounded-2xl bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center gap-2.5">
-              <StepBadge>1</StepBadge>
-              <h2 className="font-bold text-slate-900">Selecionar Cabeceiro</h2>
-            </div>
+        {/* Toggle de modo */}
+        <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+          <button
+            type="button"
+            onClick={() => handleTrocarModo("cabeceiro")}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+              modo === "cabeceiro" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50"
+            }`}
+          >
+            <Users size={16} />
+            Ver por Cabeceiro
+          </button>
+          <button
+            type="button"
+            onClick={() => handleTrocarModo("pezeiro")}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+              modo === "pezeiro" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50"
+            }`}
+          >
+            <Users size={16} />
+            Ver por Pezeiro
+          </button>
+        </div>
 
-            <p className="mb-2 text-xs text-slate-500">Cabeceiro ativo</p>
-            <button className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition-colors hover:bg-slate-100">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-600">
-                  JV
-                </span>
-                <span className="text-sm font-semibold text-slate-900">
-                  João Vaqueiro
-                </span>
-                <span className="rounded-md bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-600">
-                  HC 2,0
-                </span>
-              </div>
-              <ChevronDown size={18} className="text-slate-400" />
-            </button>
+        {erro && (
+          <div className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-600">{erro}</div>
+        )}
+
+        {carregandoBase ? (
+          <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+            <p className="text-sm text-slate-400">Carregando cabeceiros e pezeiros...</p>
           </div>
-
-          {/* Card 2 — Escolher Dupla */}
-          <div className="rounded-2xl bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center gap-2.5">
-              <StepBadge>2</StepBadge>
-              <h2 className="font-bold text-slate-900">Escolher Dupla</h2>
-            </div>
-
-            <p className="mb-3 text-xs text-slate-500">
-              Selecione manualmente ou sorteie
+        ) : cabeceiros.length === 0 || pezeiros.length === 0 ? (
+          <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+            <p className="text-sm text-slate-400">
+              Cadastre pelo menos um cabeceiro e um pezeiro nessa prova pra começar.
             </p>
-            <div className="flex flex-col gap-2.5 sm:flex-row">
-              <button className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50">
-                <UserPlus size={16} />
-                Selecionar Pezeiro
-              </button>
-              <button className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700">
-                <Dices size={16} />
-                Sortear Duplas
-              </button>
-            </div>
           </div>
+        ) : (
+          <>
+            {/* Linha 1 — Seleção / dupla / resumo */}
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+              {/* Card 1 — Selecionar entidade fixa */}
+              <div className="rounded-2xl bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center gap-2.5">
+                  <StepBadge>1</StepBadge>
+                  <h2 className="font-bold text-slate-900">Selecionar {tituloFixo}</h2>
+                </div>
 
-          {/* Card 3 — Resumo do Cabeceiro */}
-          <div className="rounded-2xl bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center gap-2.5">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
-                <BarChart3 size={15} />
-              </span>
-              <h2 className="font-bold text-slate-900">Resumo do Cabeceiro</h2>
+                <p className="mb-2 text-xs text-slate-500">{tituloFixo} ativo</p>
+                {modo === "cabeceiro" ? (
+                  <CabeceiroSelect
+                    cabeceiros={cabeceirosParaSelecionar}
+                    selecionadoId={entidadeFixaId}
+                    onSelect={handleSelecionarEntidadeFixa}
+                  />
+                ) : (
+                  <PezeiroSelect
+                    pezeiros={pezeirosParaSelecionar}
+                    selecionadoId={entidadeFixaId}
+                    onSelect={handleSelecionarEntidadeFixa}
+                  />
+                )}
+              </div>
+
+              {/* Card 2 — Escolher Dupla */}
+              <div className="rounded-2xl bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center gap-2.5">
+                  <StepBadge>2</StepBadge>
+                  <h2 className="font-bold text-slate-900">Escolher Dupla</h2>
+                </div>
+
+                <p className="mb-2 text-xs text-slate-500">Selecione manualmente ou sorteie</p>
+                {modo === "cabeceiro" ? (
+                  <PezeiroSelect
+                    pezeiros={pezeirosDisponiveis}
+                    selecionadoId={parceiroId}
+                    onSelect={setParceiroId}
+                  />
+                ) : (
+                  <CabeceiroSelect
+                    cabeceiros={cabeceirosDisponiveis}
+                    selecionadoId={parceiroId}
+                    onSelect={setParceiroId}
+                  />
+                )}
+
+                <div className="mt-2.5">
+                  <label htmlFor="bois-nu" className="mb-1.5 block text-xs text-slate-500">
+                    Qtd. de Bois{" "}
+                    {!categoriaAberta && (
+                      <span className="text-slate-400">(definida pela regra de HC)</span>
+                    )}
+                  </label>
+                  <input
+                    id="bois-nu"
+                    type="text"
+                    inputMode="numeric"
+                    value={boisNuTexto}
+                    onChange={(e) => setBoisNuTexto(e.target.value)}
+                    disabled={!categoriaAberta}
+                    placeholder="—"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:text-slate-400"
+                  />
+                </div>
+
+                <div className="mt-3 flex flex-col gap-2.5 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={handleFormarDupla}
+                    disabled={!entidadeFixa || parceiroId === null}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+                  >
+                    <UserPlus size={16} />
+                    Formar Dupla
+                  </button>
+                </div>
+
+                <div className="mt-4 border-t border-slate-100 pt-3">
+                  <label htmlFor="qtd-sorteio" className="mb-1.5 block text-xs text-slate-500">
+                    Sortear {tituloParceiro.toLowerCase()}s (quantidade)
+                  </label>
+                  <div className="flex gap-2.5">
+                    <input
+                      id="qtd-sorteio"
+                      type="text"
+                      inputMode="numeric"
+                      value={quantidadeSorteio}
+                      onChange={(e) => setQuantidadeSorteio(e.target.value)}
+                      placeholder="Ex: 5"
+                      className="w-24 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSortearDuplas}
+                      disabled={!entidadeFixa || sorteando || !quantidadeSorteio.trim()}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                    >
+                      <Dices size={16} />
+                      {sorteando ? "Sorteando..." : "Sortear Duplas"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3 — Resumo */}
+              <div className="rounded-2xl bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center gap-2.5">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                    <BarChart3 size={15} />
+                  </span>
+                  <h2 className="font-bold text-slate-900">Resumo do {tituloFixo}</h2>
+                </div>
+
+                <div className="flex gap-2.5">
+                  <StatBox
+                    value={modo === "cabeceiro" ? pezeiros.length : cabeceiros.length}
+                    label={tituloParceiro + "s"}
+                    tone="blue"
+                  />
+                  <StatBox value={duplas.length} label="Duplas" tone="purple" />
+                  <StatBox
+                    value={duplas.reduce((soma, d) => soma + d.bois, 0)}
+                    label="Total Bois"
+                    tone="green"
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="flex gap-2.5">
-              <StatBox value={10} label="Pezeiros" tone="blue" />
-              <StatBox value={10} label="Duplas" tone="purple" />
-              <StatBox value={40} label="Total Bois" tone="green" />
+            {/* Linha 2 — Tabela de duplas + regra de bois */}
+            <div className="flex flex-col gap-5 lg:flex-row">
+              {carregandoDuplas ? (
+                <div className="flex flex-1 items-center justify-center rounded-2xl bg-white p-10 text-sm text-slate-400 shadow-sm">
+                  Carregando duplas...
+                </div>
+              ) : entidadeFixa && modo === "cabeceiro" ? (
+                <DuplasTable
+                  cabeceiroNome={entidadeFixa.nome}
+                  hcCabeceiro={entidadeFixa.hc}
+                  duplas={duplas.map(paraDuplaRow)}
+                  onDuplasChange={handleDuplasChange}
+                />
+              ) : entidadeFixa && modo === "pezeiro" ? (
+                <DuplasPorPezeiroTable
+                  pezeiroNome={entidadeFixa.nome}
+                  hcPezeiro={entidadeFixa.hc}
+                  duplas={duplas.map(paraDuplaPorPezeiroRow)}
+                  onDuplasChange={handleDuplasChange}
+                />
+              ) : (
+                <div className="flex flex-1 items-center justify-center rounded-2xl bg-white p-10 text-sm text-slate-400 shadow-sm">
+                  Selecione um {tituloFixo.toLowerCase()} para ver as duplas formadas.
+                </div>
+              )}
+              {/* <RegraBoisPanel /> */}
             </div>
-          </div>
-        </div>
-
-        {/* Linha 2 — Tabela de duplas + regra de bois */}
-        <div className="flex flex-col gap-5 lg:flex-row">
-          <DuplasTable
-            cabeceiroNome="João Vaqueiro"
-            hcCabeceiro={2.0}
-            duplas={DUPLAS_EXEMPLO}
-          />
-          {/* <RegraBoisPanel /> */}
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { LayoutGrid, Users, User, Trophy, Menu, X, type LucideIcon } from "lucide-react";
 
-type MenuLabel = "Provas" | "Dashboard" | "Cabeceiros" | "Pezeiros" | "Duplas e Resultados";
+type MenuLabel = "Provas" | "Formar Duplas" | "Cabeceiros" | "Pezeiros" | "Duplas e Resultados";
 
 interface MenuItem {
   label: MenuLabel;
@@ -9,10 +9,10 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
+  { label: "Formar Duplas", icon: LayoutGrid },
   { label: "Duplas e Resultados", icon: Trophy },
   { label: "Cabeceiros", icon: Users },
   { label: "Pezeiros", icon: User },
-  { label: "Dashboard", icon: LayoutGrid },
 ];
 
 const FIRST_MENU_ITEMS: MenuItem[] = [
@@ -45,7 +45,7 @@ function LogoMark() {
 }
 
 export default function Sidebar({
-  active = "Dashboard",
+  active = "Formar Duplas",
   onNavigate = () => {},
 }: SidebarProps) {
   const [open, setOpen] = useState(false);

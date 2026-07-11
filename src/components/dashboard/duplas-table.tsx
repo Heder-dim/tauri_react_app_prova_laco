@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Avatar from "../ui/avatar";
 import LiveBadge from "../ui/live-badge";
 
 export interface DuplaRow {
   numero: number;
+  inscricao: number;
   pezeiroIniciais: string;
   pezeiroNome: string;
   hcPez: number;
   hcDupla: number;
   bois: number;
-  /** Tempos do 1º ao 5º boi, em segundos. `null` = ainda não corrido. */
+  /** Tempos do 1º ao 6º boi, em segundos. `null` = ainda não corrido. */
   tempos: (number | null)[];
   /** Calculado automaticamente a partir de `tempos` (soma) */
   parcial: number;
@@ -68,6 +69,14 @@ export default function DuplasTable({
   // Guarda o texto exatamente como foi digitado em cada campo (chave: "tempo-<duplaIndex>-<tempoIndex>" ou "boiFinal-<duplaIndex>"),
   // pra não perder a vírgula/ponto ao reformatar o número a cada tecla.
   const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
+
+  // Ressincroniza sempre que o array recebido via prop mudar de fato — necessário porque
+  // o estado interno existe pra permitir edição local, mas não pode "ficar preso" nos dados
+  // iniciais quando o cabeceiro selecionado muda ou uma nova dupla é formada na página.
+  useEffect(() => {
+    setDuplas(duplasIniciais);
+    setRawInputs({});
+  }, [duplasIniciais]);
 
   function handleTempoChange(duplaIndex: number, tempoIndex: number, rawValue: string) {
     setRawInputs((prev) => ({ ...prev, [`tempo-${duplaIndex}-${tempoIndex}`]: rawValue }));
@@ -139,9 +148,10 @@ export default function DuplasTable({
 
       {/* Tabela */}
       <div className="overflow-x-auto">
-        <table className="border-collapse table-fixed text-sm" style={{ width: 1016 }}>
+        <table className="border-collapse table-fixed text-sm" style={{ width: 1144 }}>
           <colgroup>
             <col style={{ width: 40 }} /> {/* # */}
+            <col style={{ width: 64 }} /> {/* Inscrição */}
             <col style={{ width: 160 }} /> {/* Pezeiro */}
             <col style={{ width: 70 }} /> {/* HC Pez. */}
             <col style={{ width: 70 }} /> {/* HC Dupla */}
@@ -151,6 +161,7 @@ export default function DuplasTable({
             <col style={{ width: 64 }} /> {/* 3º Boi */}
             <col style={{ width: 64 }} /> {/* 4º Boi */}
             <col style={{ width: 64 }} /> {/* 5º Boi */}
+            <col style={{ width: 64 }} /> {/* 6º Boi */}
             <col style={{ width: 70 }} /> {/* Parcial */}
             <col style={{ width: 70 }} /> {/* Boi Final */}
             <col style={{ width: 70 }} /> {/* Média */}
@@ -160,6 +171,9 @@ export default function DuplasTable({
             <tr>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 #
+              </th>
+              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+                Inscrição
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 Pezeiro
@@ -173,7 +187,7 @@ export default function DuplasTable({
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 Bois
               </th>
-              <th colSpan={5} className="border-b border-slate-100 bg-slate-50 px-2 py-1.5 text-center text-xs font-semibold text-slate-500">
+              <th colSpan={6} className="border-b border-slate-100 bg-slate-50 px-2 py-1.5 text-center text-xs font-semibold text-slate-500">
                 Tempo de Cada Boi (seg.)
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
@@ -190,7 +204,7 @@ export default function DuplasTable({
               </th>
             </tr>
             <tr>
-              {["1º Boi", "2º Boi", "3º Boi", "4º Boi", "5º Boi"].map((label) => (
+              {["1º Boi", "2º Boi", "3º Boi", "4º Boi", "5º Boi", "6º Boi"].map((label) => (
                 <th
                   key={label}
                   className="border-b border-slate-100 bg-slate-50 px-2 py-1.5 text-center text-xs font-medium text-slate-400"
@@ -205,6 +219,9 @@ export default function DuplasTable({
               <tr key={dupla.numero} className="border-b border-slate-50 last:border-0">
                 <td className="px-2 py-3 text-slate-400">
                   {String(dupla.numero).padStart(2, "0")}
+                </td>
+                <td className="px-2 py-3 font-semibold text-slate-700">
+                  {dupla.inscricao}
                 </td>
                 <td className="px-2 py-3">
                   <div className="flex items-center gap-2">

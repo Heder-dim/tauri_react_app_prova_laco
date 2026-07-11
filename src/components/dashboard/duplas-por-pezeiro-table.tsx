@@ -1,34 +1,34 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Avatar from "../ui/avatar";
 import LiveBadge from "../ui/live-badge";
 
-export interface DuplaResultadoRow {
+export interface DuplaPorPezeiroRow {
   numero: number;
   inscricao: number;
+  cabeceiroIniciais: string;
   cabeceiroNome: string;
   hcCabeceiro: number;
-  pezeiroIniciais: string;
-  pezeiroNome: string;
-  hcPez: number;
   hcDupla: number;
   bois: number;
   /** Tempos do 1º ao 6º boi, em segundos. `null` = ainda não corrido. */
   tempos: (number | null)[];
   /** Calculado automaticamente a partir de `tempos` (soma) */
   parcial: number;
-  /** Editável — campo independente, não é calculado a partir de `tempos` */
+  /** Editável — campo independente, não é mais calculado a partir de `tempos` */
   boiFinal: number;
-  /** Calculado automaticamente a partir de `tempos` + `boiFinal` */
+  /** Calculado automaticamente a partir de `tempos` */
   media: number;
   /** Ainda estático — depende da comparação com as outras duplas (regra de ranking não definida) */
   paraGanhar: number;
 }
 
-export interface DuplasResultadosTableProps {
-  duplas: DuplaResultadoRow[];
+export interface DuplasPorPezeiroTableProps {
+  pezeiroNome: string;
+  hcPezeiro: number;
+  duplas: DuplaPorPezeiroRow[];
   aoVivo?: boolean;
   /** Chamado sempre que um tempo ou o Boi Final é editado, já com os valores recalculados */
-  onDuplasChange?: (duplas: DuplaResultadoRow[]) => void;
+  onDuplasChange?: (duplas: DuplaPorPezeiroRow[]) => void;
 }
 
 function formatTempo(valor: number | null) {
@@ -45,7 +45,7 @@ function parseTempoInput(raw: string): number | null {
 }
 
 /** Recalcula Parcial (soma dos tempos 1-5) e Média (tempos 1-5 + Boi Final) */
-function recalcularParcialEMedia(dupla: DuplaResultadoRow): DuplaResultadoRow {
+function recalcularParcialEMedia(dupla: DuplaPorPezeiroRow): DuplaPorPezeiroRow {
   const temposValidos = dupla.tempos.filter((t): t is number => t !== null);
 
   const parcial = temposValidos.reduce((soma, t) => soma + t, 0);
@@ -57,15 +57,23 @@ function recalcularParcialEMedia(dupla: DuplaResultadoRow): DuplaResultadoRow {
   return { ...dupla, parcial, media };
 }
 
-export default function DuplasResultadosTable({
+export default function DuplasPorPezeiroTable({
+  pezeiroNome,
+  hcPezeiro,
   duplas: duplasIniciais,
   aoVivo = true,
   onDuplasChange,
-}: DuplasResultadosTableProps) {
-  const [duplas, setDuplas] = useState<DuplaResultadoRow[]>(duplasIniciais);
+}: DuplasPorPezeiroTableProps) {
+  const [duplas, setDuplas] = useState<DuplaPorPezeiroRow[]>(duplasIniciais);
 
   // Guarda o texto exatamente como foi digitado em cada campo, pra não perder a vírgula/ponto ao reformatar.
   const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
+
+  // Ressincroniza sempre que o array recebido via prop mudar de fato (pezeiro trocado, dupla nova formada).
+  useEffect(() => {
+    setDuplas(duplasIniciais);
+    setRawInputs({});
+  }, [duplasIniciais]);
 
   function handleTempoChange(duplaIndex: number, tempoIndex: number, rawValue: string) {
     setRawInputs((prev) => ({ ...prev, [`tempo-${duplaIndex}-${tempoIndex}`]: rawValue }));
@@ -117,22 +125,29 @@ export default function DuplasResultadosTable({
       {/* Cabeçalho do card */}
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="font-bold text-slate-900">Duplas e Resultados</h2>
-          <p className="mt-0.5 text-xs text-slate-500">{duplas.length} duplas</p>
+          <h2 className="font-bold text-slate-900">
+            Duplas do Pezeiro:{" "}
+            <span className="text-blue-600">{pezeiroNome}</span>
+          </h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            HC Pezeiro:{" "}
+            <span className="font-semibold text-blue-600">
+              {hcPezeiro.toFixed(1).replace(".", ",")}
+            </span>{" "}
+            · {duplas.length} duplas
+          </p>
         </div>
         {aoVivo && <LiveBadge />}
       </div>
 
       {/* Tabela */}
       <div className="overflow-x-auto">
-        <table className="border-collapse table-fixed text-sm" style={{ width: 1194 }}>
+        <table className="border-collapse table-fixed text-sm" style={{ width: 1144 }}>
           <colgroup>
             <col style={{ width: 40 }} /> {/* # */}
             <col style={{ width: 64 }} /> {/* Inscrição */}
-            <col style={{ width: 140 }} /> {/* Cabeceiro */}
-            <col style={{ width: 80 }} /> {/* HC Cabeceiro */}
-            <col style={{ width: 140 }} /> {/* Pezeiro */}
-            <col style={{ width: 70 }} /> {/* HC Pez. */}
+            <col style={{ width: 160 }} /> {/* Cabeceiro */}
+            <col style={{ width: 70 }} /> {/* HC Cabeceiro */}
             <col style={{ width: 70 }} /> {/* HC Dupla */}
             <col style={{ width: 56 }} /> {/* Bois */}
             <col style={{ width: 64 }} /> {/* 1º Boi */}
@@ -159,12 +174,6 @@ export default function DuplasResultadosTable({
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 HC Cabeceiro
-              </th>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
-                Pezeiro
-              </th>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
-                HC Pez.
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 HC Dupla
@@ -209,24 +218,16 @@ export default function DuplasResultadosTable({
                   {dupla.inscricao}
                 </td>
                 <td className="px-2 py-3">
-                  <span className="font-semibold text-blue-600">{dupla.cabeceiroNome}</span>
-                </td>
-                <td className="px-2 py-3">
-                  <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600">
-                    {dupla.hcCabeceiro.toFixed(1).replace(".", ",")}
-                  </span>
-                </td>
-                <td className="px-2 py-3">
                   <div className="flex items-center gap-2">
-                    <Avatar initials={dupla.pezeiroIniciais} />
+                    <Avatar initials={dupla.cabeceiroIniciais} />
                     <span className="font-semibold text-slate-900">
-                      {dupla.pezeiroNome}
+                      {dupla.cabeceiroNome}
                     </span>
                   </div>
                 </td>
                 <td className="px-2 py-3">
                   <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600">
-                    {dupla.hcPez.toFixed(1).replace(".", ",")}
+                    {dupla.hcCabeceiro.toFixed(1).replace(".", ",")}
                   </span>
                 </td>
                 <td className="px-2 py-3">
@@ -247,7 +248,7 @@ export default function DuplasResultadosTable({
                         value={tempoInputValue(duplaIndex, tempoIndex, tempo)}
                         placeholder="–"
                         disabled={!habilitado}
-                        aria-label={`Tempo do ${tempoIndex + 1}º boi — ${dupla.pezeiroNome}`}
+                        aria-label={`Tempo do ${tempoIndex + 1}º boi — ${dupla.cabeceiroNome}`}
                         onChange={(e) => handleTempoChange(duplaIndex, tempoIndex, e.target.value)}
                         className={`box-border w-full rounded-md border border-transparent bg-transparent px-1.5 py-1 text-center outline-none transition-colors placeholder:text-slate-300 ${
                           habilitado
@@ -267,13 +268,13 @@ export default function DuplasResultadosTable({
                   {formatTempo(dupla.parcial)}
                 </td>
 
-                {/* Boi Final — editável, independente dos tempos */}
+                {/* Boi Final — editável */}
                 <td className="box-border px-1 py-2">
                   <input
                     type="text"
                     inputMode="decimal"
                     value={boiFinalInputValue(duplaIndex, dupla.boiFinal)}
-                    aria-label={`Boi Final — ${dupla.pezeiroNome}`}
+                    aria-label={`Boi Final — ${dupla.cabeceiroNome}`}
                     onChange={(e) => handleBoiFinalChange(duplaIndex, e.target.value)}
                     className="box-border w-full rounded-md border border-transparent bg-green-50 px-1.5 py-1 text-center font-semibold text-green-600 outline-none transition-colors hover:bg-green-100 focus:border-green-300 focus:bg-white focus:ring-2 focus:ring-green-100"
                   />

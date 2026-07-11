@@ -2,14 +2,14 @@ import { Pencil, Trash2, Users } from "lucide-react";
 import Avatar from "../ui/avatar";
 
 export interface Pezeiro {
-  id: string;
+  id: number;
   nome: string;
   hc: number;
 }
 
 export interface PezeirosListProps {
   pezeiros: Pezeiro[];
-  onRemove: (id: string) => void;
+  onRemove: (id: number) => void;
 }
 
 function iniciaisDoNome(nome: string) {

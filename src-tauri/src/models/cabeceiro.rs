@@ -1,0 +1,9 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Cabeceiro {
+    pub id: i64,
+    pub nome: String,
+    pub hc: f64,
+    pub id_prova: i64,
+}
