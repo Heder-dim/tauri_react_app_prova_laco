@@ -81,8 +81,8 @@ export function sortearInscricoes(
   while (pendentes.length > 0) {
     const elegiveis = pendentes.filter(
       (d) =>
-        distancia(ultimaPosicaoCabeceiro, d.idCabeceiro) >= intervaloMinimo &&
-        distancia(ultimaPosicaoPezeiro, d.idPezeiro) >= intervaloMinimo
+        distancia(ultimaPosicaoCabeceiro, d.idCabeceiro) > intervaloMinimo &&
+        distancia(ultimaPosicaoPezeiro, d.idPezeiro) > intervaloMinimo
     );
 
     let candidatos = elegiveis;

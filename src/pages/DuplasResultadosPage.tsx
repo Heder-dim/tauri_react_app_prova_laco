@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Download, Shuffle } from "lucide-react";
 import PageHeader from "../components/layout/page-header";
 import DuplasResultadosTable, {
   type DuplaResultadoRow,
 } from "../components/duplas-resultados/duplas-resultados-table";
+import LiderProvaCard from "../components/duplas-resultados/lider-prova-card";
 // import RegraBoisPanelEditavel from "../components/duplas-resultados/regra-bois-panel";
 import { sortearInscricoes } from "../lib/sorteio";
+import { calcularMenorMedia, calcularParaGanhar } from "../lib/para-ganhar";
 import {
   atualizarDupla,
   atualizarInscricao,
@@ -66,6 +68,22 @@ export default function DuplasResultadosPage() {
     carregarDuplas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idProvaNum]);
+
+  /** "Para Ganhar" recalculado ao vivo — muda sempre que a média de qualquer dupla muda */
+  const duplasComParaGanhar = useMemo(() => {
+    const menorMedia = calcularMenorMedia(duplas);
+    return duplas.map((d) => ({
+      ...d,
+      paraGanhar: calcularParaGanhar(d.bois, d.parcial, menorMedia),
+    }));
+  }, [duplas]);
+
+  /** Dupla líder da prova no momento — quem tem a menor média entre quem já tem resultado */
+  const lider = useMemo(() => {
+    const candidatas = duplas.filter((d) => d.media > 0);
+    if (candidatas.length === 0) return null;
+    return candidatas.reduce((melhor, atual) => (atual.media < melhor.media ? atual : melhor));
+  }, [duplas]);
 
   async function carregarDuplas() {
     setCarregando(true);
@@ -147,6 +165,10 @@ export default function DuplasResultadosPage() {
 
       if (!mudou) return;
 
+      // Recalcula o Para Ganhar com a média mais atual (incluindo a mudança que acabou de acontecer)
+      const menorMediaAtual = calcularMenorMedia(comId);
+      const paraGanharAtualizado = calcularParaGanhar(dupla.bois, dupla.parcial, menorMediaAtual);
+
       const { boi1, boi2, boi3, boi4, boi5, boi6 } = temposParaBois(dupla.tempos);
       atualizarDupla({
         id: dupla.id,
@@ -159,7 +181,7 @@ export default function DuplasResultadosPage() {
         parcial: dupla.parcial,
         boiFinal: dupla.boiFinal,
         media: dupla.media,
-        paraGanhar: dupla.paraGanhar,
+        paraGanhar: paraGanharAtualizado,
       }).catch((e) => {
         setErro(typeof e === "string" ? e : "Não foi possível salvar a alteração.");
       });
@@ -227,7 +249,8 @@ export default function DuplasResultadosPage() {
             </div>
 
             <div className="flex flex-col gap-5 lg:flex-row">
-              <DuplasResultadosTable duplas={duplas} onDuplasChange={handleDuplasChange} />
+              <DuplasResultadosTable duplas={duplasComParaGanhar} onDuplasChange={handleDuplasChange} />
+              <LiderProvaCard lider={lider} />
               {/* <RegraBoisPanelEditavel /> */}
             </div>
           </>
