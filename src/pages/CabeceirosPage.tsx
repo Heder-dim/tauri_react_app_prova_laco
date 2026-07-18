@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { UploadCloud } from "lucide-react";
 import PageHeader from "../components/layout/page-header";
 import StatBox from "../components/ui/stat-box";
 import CabeceiroForm, { type NovoCabeceiro } from "../components/cabeceiros/cabeceiro-form";
 import CabeceirosList, { type Cabeceiro } from "../components/cabeceiros/cabeceiros-list";
+import ImportarEmMassaModal, {
+  type LinhaImportada,
+} from "../components/ui/importar-em-massa-modal";
 import { criarCabeceiro, deletarCabeceiro, listarCabeceirosPorProva } from "../services/cabeceiros";
 
 export default function CabeceirosPage() {
@@ -13,6 +17,7 @@ export default function CabeceirosPage() {
   const [cabeceiros, setCabeceiros] = useState<Cabeceiro[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [importarAberto, setImportarAberto] = useState(false);
 
   useEffect(() => {
     carregarCabeceiros();
@@ -50,11 +55,30 @@ export default function CabeceirosPage() {
     }
   }
 
+  async function handleImportarEmMassa(linhas: LinhaImportada[]) {
+    const novosCabeceiros: Cabeceiro[] = [];
+    for (const linha of linhas) {
+      const novo = await criarCabeceiro(linha.nome, linha.hc, idProvaNum);
+      novosCabeceiros.push(novo);
+    }
+    setCabeceiros((prev) => [...prev, ...novosCabeceiros]);
+  }
+
   return (
     <div className="-m-6 min-h-screen bg-slate-50 lg:-m-10">
       <PageHeader
         title="Cabeceiros"
         subtitle="Cadastre e gerencie os cabeceiros do sistema"
+        action={
+          <button
+            type="button"
+            onClick={() => setImportarAberto(true)}
+            className="flex items-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+          >
+            <UploadCloud size={16} />
+            Importar em Massa
+          </button>
+        }
       />
 
       <div className="space-y-5 p-6 lg:p-10">
@@ -87,6 +111,13 @@ export default function CabeceirosPage() {
           <CabeceirosList cabeceiros={cabeceiros} onRemove={handleRemove} />
         )}
       </div>
+
+      <ImportarEmMassaModal
+        open={importarAberto}
+        titulo="Importar Cabeceiros em Massa"
+        onImportar={handleImportarEmMassa}
+        onClose={() => setImportarAberto(false)}
+      />
     </div>
   );
 }

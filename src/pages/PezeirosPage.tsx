@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { UploadCloud } from "lucide-react";
 import PageHeader from "../components/layout/page-header";
 import StatBox from "../components/ui/stat-box";
 import PezeiroForm, { type NovoPezeiro } from "../components/pezeiros/pezeiro-form";
 import PezeirosList, { type Pezeiro } from "../components/pezeiros/pezeiros-list";
+import ImportarEmMassaModal, {
+  type LinhaImportada,
+} from "../components/ui/importar-em-massa-modal";
 import { criarPezeiro, deletarPezeiro, listarPezeirosPorProva } from "../services/pezeiros";
 
 export default function PezeirosPage() {
@@ -13,6 +17,7 @@ export default function PezeirosPage() {
   const [pezeiros, setPezeiros] = useState<Pezeiro[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [importarAberto, setImportarAberto] = useState(false);
 
   useEffect(() => {
     carregarPezeiros();
@@ -50,11 +55,30 @@ export default function PezeirosPage() {
     }
   }
 
+  async function handleImportarEmMassa(linhas: LinhaImportada[]) {
+    const novosPezeiros: Pezeiro[] = [];
+    for (const linha of linhas) {
+      const novo = await criarPezeiro(linha.nome, linha.hc, idProvaNum);
+      novosPezeiros.push(novo);
+    }
+    setPezeiros((prev) => [...prev, ...novosPezeiros]);
+  }
+
   return (
     <div className="-m-6 min-h-screen bg-slate-50 lg:-m-10">
       <PageHeader
         title="Pezeiros"
         subtitle="Cadastre e gerencie os pezeiros do sistema"
+        action={
+          <button
+            type="button"
+            onClick={() => setImportarAberto(true)}
+            className="flex items-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+          >
+            <UploadCloud size={16} />
+            Importar em Massa
+          </button>
+        }
       />
 
       <div className="space-y-5 p-6 lg:p-10">
@@ -87,6 +111,13 @@ export default function PezeirosPage() {
           <PezeirosList pezeiros={pezeiros} onRemove={handleRemove} />
         )}
       </div>
+
+      <ImportarEmMassaModal
+        open={importarAberto}
+        titulo="Importar Pezeiros em Massa"
+        onImportar={handleImportarEmMassa}
+        onClose={() => setImportarAberto(false)}
+      />
     </div>
   );
 }

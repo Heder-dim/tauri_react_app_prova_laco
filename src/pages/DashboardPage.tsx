@@ -219,8 +219,6 @@ export default function DashboardPage() {
     carregarDuplas();
   }, [entidadeFixaId, modo]);
 
-  const categoriaAberta = prova?.categoria === "Aberta";
-
   /** A entidade fixa da tela, seja ela um cabeceiro ou um pezeiro, com formato comum {id, nome, hc} */
   const entidadeFixa = useMemo(() => {
     if (entidadeFixaId === null) return null;
@@ -298,16 +296,13 @@ export default function DashboardPage() {
     if (!parceiro) return;
 
     const hcSoma = entidadeFixa.hc + parceiro.hc;
-    let boisNu = calcularBoisNu(hcSoma);
 
-    if (categoriaAberta) {
-      const boisNuDigitado = Number(boisNuTexto);
-      if (!boisNuTexto.trim() || Number.isNaN(boisNuDigitado) || boisNuDigitado < 1 || boisNuDigitado > 6) {
-        setErro("Informe uma quantidade de bois válida (1 a 6).");
-        return;
-      }
-      boisNu = boisNuDigitado;
+    const boisNuDigitado = Number(boisNuTexto);
+    if (!boisNuTexto.trim() || Number.isNaN(boisNuDigitado) || boisNuDigitado < 1 || boisNuDigitado > 6) {
+      setErro("Informe uma quantidade de bois válida (1 a 6).");
+      return;
     }
+    const boisNu = boisNuDigitado;
 
     const idCabeceiro = modo === "cabeceiro" ? entidadeFixa.id : parceiro.id;
     const idPezeiro = modo === "cabeceiro" ? parceiro.id : entidadeFixa.id;
@@ -616,9 +611,7 @@ export default function DashboardPage() {
                 <div className="mt-2.5">
                   <label htmlFor="bois-nu" className="mb-1.5 block text-xs text-slate-500">
                     Qtd. de Bois{" "}
-                    {!categoriaAberta && (
-                      <span className="text-slate-400">(definida pela regra de HC)</span>
-                    )}
+                    <span className="text-slate-400">(sugestão pela regra de HC — pode editar)</span>
                   </label>
                   <input
                     id="bois-nu"
@@ -626,9 +619,8 @@ export default function DashboardPage() {
                     inputMode="numeric"
                     value={boisNuTexto}
                     onChange={(e) => setBoisNuTexto(e.target.value)}
-                    disabled={!categoriaAberta}
                     placeholder="—"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:text-slate-400"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
                   />
                 </div>
 
