@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Avatar from "../ui/avatar";
 import LiveBadge from "../ui/live-badge";
 
 export interface DuplaResultadoRow {
   numero: number;
   inscricao: number;
+  /** null quando a prova não usa baterias, ou quando a dupla ainda não foi organizada em nenhuma */
+  numeroBateria: number | null;
   cabeceiroNome: string;
   hcCabeceiro: number;
   pezeiroIniciais: string;
@@ -29,6 +31,8 @@ export interface DuplasResultadosTableProps {
   aoVivo?: boolean;
   /** Chamado sempre que um tempo ou o Boi Final é editado, já com os valores recalculados */
   onDuplasChange?: (duplas: DuplaResultadoRow[]) => void;
+  /** Chamado quando o usuário confirma uma nova inscrição pra uma dupla (ao sair do campo ou apertar Enter) */
+  onInscricaoChange?: (duplaIndex: number, novaInscricao: number) => void;
 }
 
 function formatTempo(valor: number | null) {
@@ -61,11 +65,20 @@ export default function DuplasResultadosTable({
   duplas: duplasIniciais,
   aoVivo = true,
   onDuplasChange,
+  onInscricaoChange,
 }: DuplasResultadosTableProps) {
   const [duplas, setDuplas] = useState<DuplaResultadoRow[]>(duplasIniciais);
 
   // Guarda o texto exatamente como foi digitado em cada campo, pra não perder a vírgula/ponto ao reformatar.
   const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
+
+  // Ressincroniza sempre que o array recebido via prop mudar de fato — necessário porque
+  // o estado interno existe pra permitir edição local, mas não pode "ficar preso" nos dados
+  // iniciais quando a página recarrega, sorteia inscrição, ou edita uma dupla.
+  useEffect(() => {
+    setDuplas(duplasIniciais);
+    setRawInputs({});
+  }, [duplasIniciais]);
 
   function handleTempoChange(duplaIndex: number, tempoIndex: number, rawValue: string) {
     setRawInputs((prev) => ({ ...prev, [`tempo-${duplaIndex}-${tempoIndex}`]: rawValue }));
@@ -100,6 +113,34 @@ export default function DuplasResultadosTable({
     });
   }
 
+  /** Só atualiza o texto digitado — a mudança de verdade só acontece ao confirmar (blur/Enter),
+   * já que editar a inscrição desloca todas as outras duplas (operação mais "pesada"). */
+  function handleInscricaoInputChange(duplaIndex: number, rawValue: string) {
+    setRawInputs((prev) => ({ ...prev, [`inscricao-${duplaIndex}`]: rawValue }));
+  }
+
+  function limparRawInscricao(duplaIndex: number) {
+    setRawInputs((prev) => {
+      const copia = { ...prev };
+      delete copia[`inscricao-${duplaIndex}`];
+      return copia;
+    });
+  }
+
+  function handleInscricaoCommit(duplaIndex: number) {
+    const raw = rawInputs[`inscricao-${duplaIndex}`];
+    if (raw === undefined) return; // nada foi digitado, não há o que confirmar
+
+    const novaInscricao = Number(raw.trim());
+    if (!raw.trim() || Number.isNaN(novaInscricao) || novaInscricao < 1) {
+      limparRawInscricao(duplaIndex); // valor inválido — descarta e volta a mostrar o original
+      return;
+    }
+
+    limparRawInscricao(duplaIndex);
+    onInscricaoChange?.(duplaIndex, Math.trunc(novaInscricao));
+  }
+
   function tempoInputValue(duplaIndex: number, tempoIndex: number, tempo: number | null) {
     const raw = rawInputs[`tempo-${duplaIndex}-${tempoIndex}`];
     if (raw !== undefined) return raw;
@@ -110,6 +151,12 @@ export default function DuplasResultadosTable({
     const raw = rawInputs[`boiFinal-${duplaIndex}`];
     if (raw !== undefined) return raw;
     return boiFinal.toString().replace(".", ",");
+  }
+
+  function inscricaoInputValue(duplaIndex: number, inscricao: number) {
+    const raw = rawInputs[`inscricao-${duplaIndex}`];
+    if (raw !== undefined) return raw;
+    return String(inscricao);
   }
 
   return (
@@ -125,31 +172,36 @@ export default function DuplasResultadosTable({
 
       {/* Tabela */}
       <div className="overflow-x-auto">
-        <table className="border-collapse table-fixed text-sm" style={{ width: 1194 }}>
+        <table className="border-collapse table-fixed text-sm" style={{ width: 1244 }}>
+          {/* Larguras: # / Bateria / Inscrição / Cabeceiro / HC Cabeceiro / Pezeiro / HC Pez. / HC Dupla / Bois / 1º-6º Boi / Parcial / Boi Final / Média / Para Ganhar */}
           <colgroup>
-            <col style={{ width: 40 }} /> {/* # */}
-            <col style={{ width: 64 }} /> {/* Inscrição */}
-            <col style={{ width: 140 }} /> {/* Cabeceiro */}
-            <col style={{ width: 80 }} /> {/* HC Cabeceiro */}
-            <col style={{ width: 140 }} /> {/* Pezeiro */}
-            <col style={{ width: 70 }} /> {/* HC Pez. */}
-            <col style={{ width: 70 }} /> {/* HC Dupla */}
-            <col style={{ width: 56 }} /> {/* Bois */}
-            <col style={{ width: 64 }} /> {/* 1º Boi */}
-            <col style={{ width: 64 }} /> {/* 2º Boi */}
-            <col style={{ width: 64 }} /> {/* 3º Boi */}
-            <col style={{ width: 64 }} /> {/* 4º Boi */}
-            <col style={{ width: 64 }} /> {/* 5º Boi */}
-            <col style={{ width: 64 }} /> {/* 6º Boi */}
-            <col style={{ width: 70 }} /> {/* Parcial */}
-            <col style={{ width: 70 }} /> {/* Boi Final */}
-            <col style={{ width: 70 }} /> {/* Média */}
-            <col style={{ width: 90 }} /> {/* Para Ganhar */}
+            <col style={{ width: 40 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 140 }} />
+            <col style={{ width: 80 }} />
+            <col style={{ width: 140 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 56 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 90 }} />
           </colgroup>
           <thead>
             <tr>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 #
+              </th>
+              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+                Bateria
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 Inscrição
@@ -205,8 +257,28 @@ export default function DuplasResultadosTable({
                 <td className="px-2 py-3 text-slate-400">
                   {String(dupla.numero).padStart(2, "0")}
                 </td>
-                <td className="px-2 py-3 font-semibold text-slate-700">
-                  {dupla.inscricao}
+                <td className="px-2 py-3">
+                  {dupla.numeroBateria !== null ? (
+                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                      {dupla.numeroBateria}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-300">–</span>
+                  )}
+                </td>
+                <td className="box-border px-1 py-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={inscricaoInputValue(duplaIndex, dupla.inscricao)}
+                    aria-label={`Inscrição — ${dupla.cabeceiroNome} & ${dupla.pezeiroNome}`}
+                    onChange={(e) => handleInscricaoInputChange(duplaIndex, e.target.value)}
+                    onBlur={() => handleInscricaoCommit(duplaIndex)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                    }}
+                    className="box-border w-full rounded-md border border-transparent bg-transparent px-1.5 py-1 text-center font-semibold text-slate-700 outline-none transition-colors hover:bg-slate-50 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  />
                 </td>
                 <td className="px-2 py-3">
                   <span className="font-semibold text-blue-600">{dupla.cabeceiroNome}</span>

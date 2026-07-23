@@ -47,13 +47,36 @@ const SELECT_DUPLA_DETALHADA: &str = "
 pub fn criar_dupla(
     id_cabeceiro: i64,
     id_pezeiro: i64,
-    numero_bateria: Option<i64>,
     inscricao: i64,
     hc_soma: f64,
     bois_nu: i64,
     db: State<DbConnection>,
 ) -> Result<Dupla, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
+
+    // A bateria da dupla é sempre derivada da bateria do cabeceiro e do pezeiro — nunca
+    // recebida do front-end — assim é impossível criar uma dupla cruzando baterias por engano.
+    let bateria_cabeceiro: Option<i64> = conn
+        .query_row(
+            "SELECT numero_bateria FROM cabeceiros WHERE id = ?1",
+            params![id_cabeceiro],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let bateria_pezeiro: Option<i64> = conn
+        .query_row(
+            "SELECT numero_bateria FROM pezeiros WHERE id = ?1",
+            params![id_pezeiro],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    if bateria_cabeceiro != bateria_pezeiro {
+        return Err(
+            "O cabeceiro e o pezeiro precisam estar na mesma bateria pra formar dupla.".into(),
+        );
+    }
+    let numero_bateria = bateria_cabeceiro;
 
     conn.execute(
         "INSERT INTO duplas (id_cabeceiro, id_pezeiro, numero_bateria, inscricao, hc_soma, bois_nu)

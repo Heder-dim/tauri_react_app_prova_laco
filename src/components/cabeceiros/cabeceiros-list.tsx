@@ -5,11 +5,15 @@ export interface Cabeceiro {
   id: number;
   nome: string;
   hc: number;
+  numero_bateria: number | null;
 }
 
 export interface CabeceirosListProps {
   cabeceiros: Cabeceiro[];
   onRemove: (id: number) => void;
+  /** Quantidade total de baterias da prova — se null/0, a prova não usa baterias e o seletor some */
+  bateriaNu?: number | null;
+  onAlterarBateria?: (id: number, numeroBateria: number | null) => void;
 }
 
 function iniciaisDoNome(nome: string) {
@@ -19,7 +23,14 @@ function iniciaisDoNome(nome: string) {
   return (primeira + ultima).toUpperCase();
 }
 
-export default function CabeceirosList({ cabeceiros, onRemove }: CabeceirosListProps) {
+export default function CabeceirosList({
+  cabeceiros,
+  onRemove,
+  bateriaNu,
+  onAlterarBateria,
+}: CabeceirosListProps) {
+  const mostrarBateria = Boolean(bateriaNu && bateriaNu > 0 && onAlterarBateria);
+
   return (
     <div className="rounded-2xl bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-center gap-2.5">
@@ -53,7 +64,28 @@ export default function CabeceirosList({ cabeceiros, onRemove }: CabeceirosListP
                 </span>
               </div>
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2">
+                {mostrarBateria && (
+                  <select
+                    value={cabeceiro.numero_bateria ?? ""}
+                    onChange={(e) =>
+                      onAlterarBateria!(
+                        cabeceiro.id,
+                        e.target.value === "" ? null : Number(e.target.value)
+                      )
+                    }
+                    aria-label={`Bateria de ${cabeceiro.nome}`}
+                    className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none transition-colors focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="">Sem bateria</option>
+                    {Array.from({ length: bateriaNu ?? 0 }, (_, i) => i + 1).map((n) => (
+                      <option key={n} value={n}>
+                        Bateria {n}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
                 <button
                   type="button"
                   aria-label={`Editar ${cabeceiro.nome}`}

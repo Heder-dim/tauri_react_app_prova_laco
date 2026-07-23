@@ -149,23 +149,24 @@ export default function DuplasTable({
       {/* Tabela */}
       <div className="overflow-x-auto">
         <table className="border-collapse table-fixed text-sm" style={{ width: 1144 }}>
+          {/* Larguras: # / Inscrição / Pezeiro / HC Pez. / HC Dupla / Bois / 1º-6º Boi / Parcial / Boi Final / Média / Para Ganhar */}
           <colgroup>
-            <col style={{ width: 40 }} /> {/* # */}
-            <col style={{ width: 64 }} /> {/* Inscrição */}
-            <col style={{ width: 160 }} /> {/* Pezeiro */}
-            <col style={{ width: 70 }} /> {/* HC Pez. */}
-            <col style={{ width: 70 }} /> {/* HC Dupla */}
-            <col style={{ width: 56 }} /> {/* Bois */}
-            <col style={{ width: 64 }} /> {/* 1º Boi */}
-            <col style={{ width: 64 }} /> {/* 2º Boi */}
-            <col style={{ width: 64 }} /> {/* 3º Boi */}
-            <col style={{ width: 64 }} /> {/* 4º Boi */}
-            <col style={{ width: 64 }} /> {/* 5º Boi */}
-            <col style={{ width: 64 }} /> {/* 6º Boi */}
-            <col style={{ width: 70 }} /> {/* Parcial */}
-            <col style={{ width: 70 }} /> {/* Boi Final */}
-            <col style={{ width: 70 }} /> {/* Média */}
-            <col style={{ width: 90 }} /> {/* Para Ganhar */}
+            <col style={{ width: 40 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 160 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 56 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 90 }} />
           </colgroup>
           <thead>
             <tr>

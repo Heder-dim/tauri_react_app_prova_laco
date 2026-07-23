@@ -19,19 +19,22 @@ pub fn init_db(app: &AppHandle) -> Result<Connection, Box<dyn std::error::Error>
 
     // Necessário em toda conexão SQLite — por padrão as FKs vêm desligadas.
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-    conn.execute_batch(SCHEMA)?;
 
-    // Migração leve: bancos criados antes da coluna `boi_6` existir não a recebem
-    // automaticamente (CREATE TABLE IF NOT EXISTS não altera tabelas já existentes).
-    // Ignora o erro se a coluna já existir.
+    // Migrações leves pra bancos criados antes de cada coluna existir — precisam rodar
+    // ANTES do schema.sql, porque o schema já tem índices/consultas que dependem dessas
+    // colunas existirem. Como `CREATE TABLE IF NOT EXISTS` não altera tabelas já existentes,
+    // sem isso um banco antigo travaria ao tentar criar um índice numa coluna inexistente.
+    // Ignora o erro se a coluna já existir (ou se a tabela ainda nem existir, num banco novo).
     let _ = conn.execute("ALTER TABLE duplas ADD COLUMN boi_6 REAL", []);
-
-    // Mesma lógica pros campos categoria (provas) e inscricao (duplas).
     let _ = conn.execute(
         "ALTER TABLE provas ADD COLUMN categoria TEXT NOT NULL DEFAULT 'Aberta'",
         [],
     );
     let _ = conn.execute("ALTER TABLE duplas ADD COLUMN inscricao INTEGER", []);
+    let _ = conn.execute("ALTER TABLE cabeceiros ADD COLUMN numero_bateria INTEGER", []);
+    let _ = conn.execute("ALTER TABLE pezeiros ADD COLUMN numero_bateria INTEGER", []);
+
+    conn.execute_batch(SCHEMA)?;
 
     Ok(conn)
 }

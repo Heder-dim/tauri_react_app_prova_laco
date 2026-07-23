@@ -8,13 +8,20 @@ import CabeceirosList, { type Cabeceiro } from "../components/cabeceiros/cabecei
 import ImportarEmMassaModal, {
   type LinhaImportada,
 } from "../components/ui/importar-em-massa-modal";
-import { criarCabeceiro, deletarCabeceiro, listarCabeceirosPorProva } from "../services/cabeceiros";
+import {
+  atualizarBateriaCabeceiro,
+  criarCabeceiro,
+  deletarCabeceiro,
+  listarCabeceirosPorProva,
+} from "../services/cabeceiros";
+import { buscarProva } from "../services/provas";
 
 export default function CabeceirosPage() {
   const { idProva } = useParams<{ idProva: string }>();
   const idProvaNum = Number(idProva);
 
   const [cabeceiros, setCabeceiros] = useState<Cabeceiro[]>([]);
+  const [bateriaNu, setBateriaNu] = useState<number | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [importarAberto, setImportarAberto] = useState(false);
@@ -28,8 +35,12 @@ export default function CabeceirosPage() {
     setCarregando(true);
     setErro(null);
     try {
-      const dados = await listarCabeceirosPorProva(idProvaNum);
+      const [dados, prova] = await Promise.all([
+        listarCabeceirosPorProva(idProvaNum),
+        buscarProva(idProvaNum),
+      ]);
       setCabeceiros(dados);
+      setBateriaNu(prova.bateria ? prova.bateria_nu : null);
     } catch (e) {
       setErro(typeof e === "string" ? e : "Não foi possível carregar os cabeceiros.");
     } finally {
@@ -64,6 +75,17 @@ export default function CabeceirosPage() {
     setCabeceiros((prev) => [...prev, ...novosCabeceiros]);
   }
 
+  async function handleAlterarBateria(id: number, numeroBateria: number | null) {
+    try {
+      await atualizarBateriaCabeceiro(id, numeroBateria);
+      setCabeceiros((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, numero_bateria: numeroBateria } : c))
+      );
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível atualizar a bateria.");
+    }
+  }
+
   return (
     <div className="-m-6 min-h-screen bg-slate-50 lg:-m-10">
       <PageHeader
@@ -73,7 +95,7 @@ export default function CabeceirosPage() {
           <button
             type="button"
             onClick={() => setImportarAberto(true)}
-            className="flex items-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+            className="flex items-center gap-2 cursor-pointer rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
           >
             <UploadCloud size={16} />
             Importar em Massa
@@ -108,7 +130,12 @@ export default function CabeceirosPage() {
             <p className="text-sm text-slate-400">Carregando cabeceiros...</p>
           </div>
         ) : (
-          <CabeceirosList cabeceiros={cabeceiros} onRemove={handleRemove} />
+          <CabeceirosList
+            cabeceiros={cabeceiros}
+            onRemove={handleRemove}
+            bateriaNu={bateriaNu}
+            onAlterarBateria={handleAlterarBateria}
+          />
         )}
       </div>
 

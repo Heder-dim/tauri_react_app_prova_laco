@@ -25,33 +25,44 @@ CREATE TABLE IF NOT EXISTS provas (
 -- cabeceiros
 -- =========================================================
 CREATE TABLE IF NOT EXISTS cabeceiros (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome        TEXT NOT NULL,
-    hc          REAL NOT NULL,
-    id_prova    INTEGER NOT NULL,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome            TEXT NOT NULL,
+    hc              REAL NOT NULL,
+    id_prova        INTEGER NOT NULL,
+
+    -- Qual bateria esse cabeceiro pertence (relevante quando a prova tem provas.bateria = 1).
+    -- Validado na aplicação: deve estar entre 1 e provas.bateria_nu. NULL = ainda não organizado.
+    numero_bateria  INTEGER,
+
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
 
     FOREIGN KEY (id_prova) REFERENCES provas(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_cabeceiros_id_prova ON cabeceiros(id_prova);
+CREATE INDEX IF NOT EXISTS idx_cabeceiros_numero_bateria ON cabeceiros(numero_bateria);
 
 -- =========================================================
 -- pezeiros
 -- =========================================================
 CREATE TABLE IF NOT EXISTS pezeiros (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome        TEXT NOT NULL,
-    hc          REAL NOT NULL,
-    id_prova    INTEGER NOT NULL,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome            TEXT NOT NULL,
+    hc              REAL NOT NULL,
+    id_prova        INTEGER NOT NULL,
+
+    -- Mesma lógica de cabeceiros.numero_bateria.
+    numero_bateria  INTEGER,
+
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
 
     FOREIGN KEY (id_prova) REFERENCES provas(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_pezeiros_id_prova ON pezeiros(id_prova);
+CREATE INDEX IF NOT EXISTS idx_pezeiros_numero_bateria ON pezeiros(numero_bateria);
 
 -- =========================================================
 -- duplas

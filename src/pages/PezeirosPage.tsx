@@ -8,13 +8,20 @@ import PezeirosList, { type Pezeiro } from "../components/pezeiros/pezeiros-list
 import ImportarEmMassaModal, {
   type LinhaImportada,
 } from "../components/ui/importar-em-massa-modal";
-import { criarPezeiro, deletarPezeiro, listarPezeirosPorProva } from "../services/pezeiros";
+import {
+  atualizarBateriaPezeiro,
+  criarPezeiro,
+  deletarPezeiro,
+  listarPezeirosPorProva,
+} from "../services/pezeiros";
+import { buscarProva } from "../services/provas";
 
 export default function PezeirosPage() {
   const { idProva } = useParams<{ idProva: string }>();
   const idProvaNum = Number(idProva);
 
   const [pezeiros, setPezeiros] = useState<Pezeiro[]>([]);
+  const [bateriaNu, setBateriaNu] = useState<number | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [importarAberto, setImportarAberto] = useState(false);
@@ -28,8 +35,12 @@ export default function PezeirosPage() {
     setCarregando(true);
     setErro(null);
     try {
-      const dados = await listarPezeirosPorProva(idProvaNum);
+      const [dados, prova] = await Promise.all([
+        listarPezeirosPorProva(idProvaNum),
+        buscarProva(idProvaNum),
+      ]);
       setPezeiros(dados);
+      setBateriaNu(prova.bateria ? prova.bateria_nu : null);
     } catch (e) {
       setErro(typeof e === "string" ? e : "Não foi possível carregar os pezeiros.");
     } finally {
@@ -64,6 +75,17 @@ export default function PezeirosPage() {
     setPezeiros((prev) => [...prev, ...novosPezeiros]);
   }
 
+  async function handleAlterarBateria(id: number, numeroBateria: number | null) {
+    try {
+      await atualizarBateriaPezeiro(id, numeroBateria);
+      setPezeiros((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, numero_bateria: numeroBateria } : p))
+      );
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível atualizar a bateria.");
+    }
+  }
+
   return (
     <div className="-m-6 min-h-screen bg-slate-50 lg:-m-10">
       <PageHeader
@@ -73,7 +95,7 @@ export default function PezeirosPage() {
           <button
             type="button"
             onClick={() => setImportarAberto(true)}
-            className="flex items-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+            className="flex items-center cursor-pointer gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
           >
             <UploadCloud size={16} />
             Importar em Massa
@@ -108,7 +130,12 @@ export default function PezeirosPage() {
             <p className="text-sm text-slate-400">Carregando pezeiros...</p>
           </div>
         ) : (
-          <PezeirosList pezeiros={pezeiros} onRemove={handleRemove} />
+          <PezeirosList
+            pezeiros={pezeiros}
+            onRemove={handleRemove}
+            bateriaNu={bateriaNu}
+            onAlterarBateria={handleAlterarBateria}
+          />
         )}
       </div>
 

@@ -6,4 +6,5 @@ pub struct Pezeiro {
     pub nome: String,
     pub hc: f64,
     pub id_prova: i64,
+    pub numero_bateria: Option<i64>,
 }

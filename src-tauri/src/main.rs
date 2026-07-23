@@ -1,3 +1,4 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 // Se seu `npm run tauri init` já gerou um main.rs, funda este conteúdo com o que já existe
 // (mantendo o `#![cfg_attr(...)]` do topo, se houver).
 
@@ -10,6 +11,8 @@ use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             let app_handle = app.handle();
             let conn = db::init_db(app_handle)?;
@@ -23,9 +26,11 @@ fn main() {
             commands::provas::deletar_prova,
             commands::cabeceiros::criar_cabeceiro,
             commands::cabeceiros::listar_cabeceiros_por_prova,
+            commands::cabeceiros::atualizar_bateria_cabeceiro,
             commands::cabeceiros::deletar_cabeceiro,
             commands::pezeiros::criar_pezeiro,
             commands::pezeiros::listar_pezeiros_por_prova,
+            commands::pezeiros::atualizar_bateria_pezeiro,
             commands::pezeiros::deletar_pezeiro,
             commands::duplas::criar_dupla,
             commands::duplas::listar_duplas_por_cabeceiro,

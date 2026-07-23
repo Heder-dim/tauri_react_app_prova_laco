@@ -32,7 +32,6 @@ export interface DuplaDetalhadaDb extends DuplaDb {
 export interface NovaDuplaDb {
   idCabeceiro: number;
   idPezeiro: number;
-  numeroBateria?: number | null;
   inscricao: number;
   hcSoma: number;
   boisNu: number;
@@ -42,7 +41,6 @@ export function criarDupla(nova: NovaDuplaDb): Promise<DuplaDb> {
   return invoke("criar_dupla", {
     idCabeceiro: nova.idCabeceiro,
     idPezeiro: nova.idPezeiro,
-    numeroBateria: nova.numeroBateria ?? null,
     inscricao: nova.inscricao,
     hcSoma: nova.hcSoma,
     boisNu: nova.boisNu,

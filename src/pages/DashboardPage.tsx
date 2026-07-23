@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Download, Dices, UserPlus, BarChart3, Users } from "lucide-react";
+import {Dices, UserPlus, BarChart3, Users } from "lucide-react";
 import PageHeader from "../components/layout/page-header";
 import StepBadge from "../components/ui/step-badge";
 import StatBox from "../components/ui/stat-box";
@@ -136,6 +136,9 @@ export default function DashboardPage() {
   const [pezeiros, setPezeiros] = useState<PezeiroDb[]>([]);
   const [carregandoBase, setCarregandoBase] = useState(true);
 
+  // Bateria selecionada na tela — só relevante quando a prova usa baterias (prova.bateria === true)
+  const [bateriaAtiva, setBateriaAtiva] = useState<number | null>(null);
+
   // Id da entidade "fixa" na tela (o cabeceiro selecionado, no modo Cabeceiro; o pezeiro, no modo Pezeiro)
   const [entidadeFixaId, setEntidadeFixaId] = useState<number | null>(null);
   // Id do "parceiro" escolhido manualmente (pezeiro no modo Cabeceiro; cabeceiro no modo Pezeiro)
@@ -170,7 +173,14 @@ export default function DashboardPage() {
         setProva(provaDb);
         setCabeceiros(cabeceirosDb);
         setPezeiros(pezeirosDb);
-        setEntidadeFixaId(cabeceirosDb[0]?.id ?? null);
+
+        const bateriaInicial = provaDb.bateria ? 1 : null;
+        setBateriaAtiva(bateriaInicial);
+
+        const cabeceirosDaBateria = bateriaInicial
+          ? cabeceirosDb.filter((c) => c.numero_bateria === bateriaInicial)
+          : cabeceirosDb;
+        setEntidadeFixaId(cabeceirosDaBateria[0]?.id ?? null);
 
         const porCabeceiro: Record<number, number> = {};
         const porPezeiro: Record<number, number> = {};
@@ -226,33 +236,41 @@ export default function DashboardPage() {
     return pezeiros.find((p) => p.id === entidadeFixaId) ?? null;
   }, [modo, entidadeFixaId, cabeceiros, pezeiros]);
 
-  // Opções pro dropdown do Card 1 (escolher a entidade fixa) — todos os cabeceiros ou todos os pezeiros
+  // Opções pro dropdown do Card 1 (escolher a entidade fixa) — todos os cabeceiros ou todos os pezeiros,
+  // filtrados pela bateria ativa quando a prova usa baterias.
   const cabeceirosParaSelecionar: CabeceiroOption[] = useMemo(
     () =>
-      cabeceiros.map((c) => ({ id: c.id, nome: c.nome, hc: c.hc, corridas: corridasPorCabeceiro[c.id] ?? 0 })),
-    [cabeceiros, corridasPorCabeceiro]
+      cabeceiros
+        .filter((c) => bateriaAtiva === null || c.numero_bateria === bateriaAtiva)
+        .map((c) => ({ id: c.id, nome: c.nome, hc: c.hc, corridas: corridasPorCabeceiro[c.id] ?? 0 })),
+    [cabeceiros, corridasPorCabeceiro, bateriaAtiva]
   );
   const pezeirosParaSelecionar: PezeiroOption[] = useMemo(
     () =>
-      pezeiros.map((p) => ({
-        id: p.id,
-        nome: p.nome,
-        hc: p.hc,
-        iniciais: iniciaisDoNome(p.nome),
-        corridas: corridasPorPezeiro[p.id] ?? 0,
-      })),
-    [pezeiros, corridasPorPezeiro]
+      pezeiros
+        .filter((p) => bateriaAtiva === null || p.numero_bateria === bateriaAtiva)
+        .map((p) => ({
+          id: p.id,
+          nome: p.nome,
+          hc: p.hc,
+          iniciais: iniciaisDoNome(p.nome),
+          corridas: corridasPorPezeiro[p.id] ?? 0,
+        })),
+    [pezeiros, corridasPorPezeiro, bateriaAtiva]
   );
 
-  // Opções pro dropdown do Card 2 (escolher o parceiro) — filtra quem já está pareado com a entidade fixa
+  // Opções pro dropdown do Card 2 (escolher o parceiro) — filtra quem já está pareado com a entidade
+  // fixa E quem não está na mesma bateria (quando a prova usa baterias).
   const cabeceirosDisponiveis: CabeceiroOption[] = useMemo(() => {
     return cabeceiros
+      .filter((c) => bateriaAtiva === null || c.numero_bateria === bateriaAtiva)
       .filter((c) => !duplas.some((d) => d.idCabeceiro === c.id))
       .map((c) => ({ id: c.id, nome: c.nome, hc: c.hc, corridas: corridasPorCabeceiro[c.id] ?? 0 }));
-  }, [cabeceiros, duplas, corridasPorCabeceiro]);
+  }, [cabeceiros, duplas, corridasPorCabeceiro, bateriaAtiva]);
 
   const pezeirosDisponiveis: PezeiroOption[] = useMemo(() => {
     return pezeiros
+      .filter((p) => bateriaAtiva === null || p.numero_bateria === bateriaAtiva)
       .filter((p) => !duplas.some((d) => d.idPezeiro === p.id))
       .map((p) => ({
         id: p.id,
@@ -261,7 +279,7 @@ export default function DashboardPage() {
         iniciais: iniciaisDoNome(p.nome),
         corridas: corridasPorPezeiro[p.id] ?? 0,
       }));
-  }, [pezeiros, duplas, corridasPorPezeiro]);
+  }, [pezeiros, duplas, corridasPorPezeiro, bateriaAtiva]);
 
   // Sugere a quantidade de bois (pela regra) sempre que a dupla escolhida mudar.
   useEffect(() => {
@@ -279,7 +297,17 @@ export default function DashboardPage() {
 
   function handleTrocarModo(novoModo: Modo) {
     setModo(novoModo);
-    setEntidadeFixaId(novoModo === "cabeceiro" ? cabeceiros[0]?.id ?? null : pezeiros[0]?.id ?? null);
+    const lista = novoModo === "cabeceiro" ? cabeceiros : pezeiros;
+    const daBateria = lista.filter((item) => bateriaAtiva === null || item.numero_bateria === bateriaAtiva);
+    setEntidadeFixaId(daBateria[0]?.id ?? null);
+    setParceiroId(null);
+  }
+
+  function handleTrocarBateria(novaBateria: number) {
+    setBateriaAtiva(novaBateria);
+    const lista = modo === "cabeceiro" ? cabeceiros : pezeiros;
+    const daBateria = lista.filter((item) => item.numero_bateria === novaBateria);
+    setEntidadeFixaId(daBateria[0]?.id ?? null);
     setParceiroId(null);
   }
 
@@ -512,12 +540,12 @@ export default function DashboardPage() {
       <PageHeader
         title="Dashboard"
         subtitle="Selecione um cabeceiro ou pezeiro para montar as duplas"
-        action={
-          <button className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700">
-            <Download size={16} />
-            Exportar PDF
-          </button>
-        }
+        // action={
+        //   <button className="flex cursor-pointer items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700">
+        //     <Download size={16} />
+        //     Exportar PDF
+        //   </button>
+        // }
       />
 
       <div className="space-y-5 p-6 lg:p-10">
@@ -526,7 +554,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => handleTrocarModo("cabeceiro")}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+            className={`flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
               modo === "cabeceiro" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50"
             }`}
           >
@@ -536,7 +564,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => handleTrocarModo("pezeiro")}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+            className={`flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
               modo === "pezeiro" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50"
             }`}
           >
@@ -544,6 +572,28 @@ export default function DashboardPage() {
             Ver por Pezeiro
           </button>
         </div>
+
+        {prova?.bateria && prova.bateria_nu && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+              Bateria
+            </span>
+            {Array.from({ length: prova.bateria_nu }, (_, i) => i + 1).map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => handleTrocarBateria(n)}
+                className={`rounded-lg  px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  bateriaAtiva === n
+                    ? "bg-blue-600 text-white"
+                    : "bg-white cursor-pointer text-slate-500 shadow-sm hover:bg-slate-50"
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        )}
 
         {erro && (
           <div className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-600">{erro}</div>
@@ -629,7 +679,7 @@ export default function DashboardPage() {
                     type="button"
                     onClick={handleFormarDupla}
                     disabled={!entidadeFixa || parceiroId === null}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+                    className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
                   >
                     <UserPlus size={16} />
                     Formar Dupla
@@ -654,7 +704,7 @@ export default function DashboardPage() {
                       type="button"
                       onClick={handleSortearDuplas}
                       disabled={!entidadeFixa || sorteando || !quantidadeSorteio.trim()}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                      className="flex flex-1 items-center cursor-pointer justify-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
                     >
                       <Dices size={16} />
                       {sorteando ? "Sorteando..." : "Sortear Duplas"}
@@ -674,7 +724,7 @@ export default function DashboardPage() {
 
                 <div className="flex gap-2.5">
                   <StatBox
-                    value={modo === "cabeceiro" ? pezeiros.length : cabeceiros.length}
+                    value={modo === "cabeceiro" ? pezeirosParaSelecionar.length : cabeceirosParaSelecionar.length}
                     label={tituloParceiro + "s"}
                     tone="blue"
                   />
