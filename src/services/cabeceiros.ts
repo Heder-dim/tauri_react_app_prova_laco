@@ -20,6 +20,10 @@ export function atualizarBateriasCabeceiro(id: number, baterias: number[]): Prom
   return invoke("atualizar_baterias_cabeceiro", { id, baterias });
 }
 
+export function atualizarCabeceiro(id: number, nome: string, hc: number): Promise<void> {
+  return invoke("atualizar_cabeceiro", { id, nome, hc });
+}
+
 export function deletarCabeceiro(id: number): Promise<void> {
   return invoke("deletar_cabeceiro", { id });
 }

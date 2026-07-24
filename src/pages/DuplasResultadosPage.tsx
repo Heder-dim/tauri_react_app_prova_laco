@@ -6,6 +6,7 @@ import DuplasResultadosTable, {
   type DuplaResultadoRow,
 } from "../components/duplas-resultados/duplas-resultados-table";
 import LiderProvaCard from "../components/duplas-resultados/lider-prova-card";
+import ConfirmDialog from "../components/ui/confirm-dialog";
 // import RegraBoisPanelEditavel from "../components/duplas-resultados/regra-bois-panel";
 import { sortearInscricoes } from "../lib/sorteio";
 import { calcularMenorMedia, calcularParaGanhar } from "../lib/para-ganhar";
@@ -16,6 +17,7 @@ import {
   atualizarDupla,
   atualizarInscricao,
   boisParaTempos,
+  deletarDupla,
   listarDuplasPorProva,
   temposParaBois,
   type DuplaDetalhadaDb,
@@ -70,6 +72,7 @@ export default function DuplasResultadosPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [intervaloTexto, setIntervaloTexto] = useState("3");
   const [sorteandoInscricao, setSorteandoInscricao] = useState(false);
+  const [duplaParaExcluir, setDuplaParaExcluir] = useState<DuplaComId | null>(null);
 
   useEffect(() => {
     carregarDuplas();
@@ -344,6 +347,27 @@ export default function DuplasResultadosPage() {
     });
   }
 
+  function handleSolicitarExclusao(duplaIndex: number) {
+    // Mesma lógica de handleInscricaoChange: o índice vem da tabela, que pode estar
+    // mostrando só um subconjunto filtrado por bateria.
+    const dupla = duplasExibidas[duplaIndex];
+    if (!dupla) return;
+    setDuplaParaExcluir(dupla);
+  }
+
+  async function handleConfirmarExclusao() {
+    if (!duplaParaExcluir) return;
+
+    try {
+      await deletarDupla(duplaParaExcluir.id);
+      setDuplas((prev) => prev.filter((d) => d.id !== duplaParaExcluir.id));
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível excluir a dupla.");
+    } finally {
+      setDuplaParaExcluir(null);
+    }
+  }
+
   async function handleExportarPdf() {
     try {
       await exportarDuplasResultadosPdf(duplasExibidas, prova?.nome);
@@ -471,6 +495,7 @@ export default function DuplasResultadosPage() {
                 duplas={duplasExibidas}
                 onDuplasChange={handleDuplasChange}
                 onInscricaoChange={handleInscricaoChange}
+                onDeletar={handleSolicitarExclusao}
               />
               <LiderProvaCard lider={lider} />
               {/* <RegraBoisPanelEditavel /> */}
@@ -478,6 +503,19 @@ export default function DuplasResultadosPage() {
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={duplaParaExcluir !== null}
+        title={
+          duplaParaExcluir
+            ? `Excluir dupla "${duplaParaExcluir.cabeceiroNome} & ${duplaParaExcluir.pezeiroNome}"?`
+            : ""
+        }
+        description="Essa ação não pode ser desfeita. Os tempos e resultados dessa dupla serão perdidos."
+        confirmLabel="Excluir"
+        onConfirm={handleConfirmarExclusao}
+        onCancel={() => setDuplaParaExcluir(null)}
+      />
     </div>
   );
 }

@@ -151,6 +151,29 @@ pub fn atualizar_baterias_pezeiro(
     Ok(())
 }
 
+/// Atualiza nome e HC de um pezeiro.
+#[tauri::command]
+pub fn atualizar_pezeiro(
+    id: i64,
+    nome: String,
+    hc: f64,
+    db: State<DbConnection>,
+) -> Result<(), String> {
+    if nome.trim().is_empty() {
+        return Err("O nome do pezeiro não pode ser vazio.".into());
+    }
+
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "UPDATE pezeiros SET nome = ?1, hc = ?2, updated_at = datetime('now') WHERE id = ?3",
+        params![nome, hc, id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 #[tauri::command]
 pub fn deletar_pezeiro(id: i64, db: State<DbConnection>) -> Result<(), String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;

@@ -10,6 +10,7 @@ import ImportarEmMassaModal, {
 } from "../components/ui/importar-em-massa-modal";
 import {
   atualizarBateriasCabeceiro,
+  atualizarCabeceiro,
   criarCabeceiro,
   deletarCabeceiro,
   listarCabeceirosPorProva,
@@ -63,6 +64,15 @@ export default function CabeceirosPage() {
       setCabeceiros((prev) => prev.filter((c) => c.id !== id));
     } catch (e) {
       setErro(typeof e === "string" ? e : "Não foi possível remover o cabeceiro.");
+    }
+  }
+
+  async function handleEditar(id: number, nome: string, hc: number) {
+    try {
+      await atualizarCabeceiro(id, nome, hc);
+      setCabeceiros((prev) => prev.map((c) => (c.id === id ? { ...c, nome, hc } : c)));
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível editar o cabeceiro.");
     }
   }
 
@@ -131,6 +141,7 @@ export default function CabeceirosPage() {
           <CabeceirosList
             cabeceiros={cabeceiros}
             onRemove={handleRemove}
+            onEditar={handleEditar}
             bateriaNu={bateriaNu}
             onAlterarBaterias={handleAlterarBaterias}
           />

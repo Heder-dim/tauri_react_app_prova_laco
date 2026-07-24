@@ -10,6 +10,7 @@ import ImportarEmMassaModal, {
 } from "../components/ui/importar-em-massa-modal";
 import {
   atualizarBateriasPezeiro,
+  atualizarPezeiro,
   criarPezeiro,
   deletarPezeiro,
   listarPezeirosPorProva,
@@ -63,6 +64,15 @@ export default function PezeirosPage() {
       setPezeiros((prev) => prev.filter((p) => p.id !== id));
     } catch (e) {
       setErro(typeof e === "string" ? e : "Não foi possível remover o pezeiro.");
+    }
+  }
+
+  async function handleEditar(id: number, nome: string, hc: number) {
+    try {
+      await atualizarPezeiro(id, nome, hc);
+      setPezeiros((prev) => prev.map((p) => (p.id === id ? { ...p, nome, hc } : p)));
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível editar o pezeiro.");
     }
   }
 
@@ -131,6 +141,7 @@ export default function PezeirosPage() {
           <PezeirosList
             pezeiros={pezeiros}
             onRemove={handleRemove}
+            onEditar={handleEditar}
             bateriaNu={bateriaNu}
             onAlterarBaterias={handleAlterarBaterias}
           />

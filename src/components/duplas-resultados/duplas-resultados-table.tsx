@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Dices } from "lucide-react";
+import { Dices, Trash2 } from "lucide-react";
 import Avatar from "../ui/avatar";
 import LiveBadge from "../ui/live-badge";
 
@@ -36,6 +36,8 @@ export interface DuplasResultadosTableProps {
   onDuplasChange?: (duplas: DuplaResultadoRow[]) => void;
   /** Chamado quando o usuário confirma uma nova inscrição pra uma dupla (ao sair do campo ou apertar Enter) */
   onInscricaoChange?: (duplaIndex: number, novaInscricao: number) => void;
+  /** Chamado quando o usuário confirma a exclusão de uma dupla (o índice na lista atual) */
+  onDeletar?: (duplaIndex: number) => void;
 }
 
 function formatTempo(valor: number | null) {
@@ -69,6 +71,7 @@ export default function DuplasResultadosTable({
   aoVivo = true,
   onDuplasChange,
   onInscricaoChange,
+  onDeletar,
 }: DuplasResultadosTableProps) {
   const [duplas, setDuplas] = useState<DuplaResultadoRow[]>(duplasIniciais);
 
@@ -175,8 +178,8 @@ export default function DuplasResultadosTable({
 
       {/* Tabela */}
       <div className="overflow-x-auto">
-        <table className="border-collapse table-fixed text-sm" style={{ width: 1244 }}>
-          {/* Larguras: # / Bateria / Inscrição / Cabeceiro / HC Cabeceiro / Pezeiro / HC Pez. / HC Dupla / Bois / 1º-6º Boi / Parcial / Boi Final / Média / Para Ganhar */}
+        <table className="border-collapse table-fixed text-sm" style={{ width: 1294 }}>
+          {/* Larguras: # / Bateria / Inscrição / Cabeceiro / HC Cabeceiro / Pezeiro / HC Pez. / HC Dupla / Bois / 1º-6º Boi / Parcial / Boi Final / Média / Para Ganhar / Ações */}
           <colgroup>
             <col style={{ width: 40 }} />
             <col style={{ width: 70 }} />
@@ -197,6 +200,7 @@ export default function DuplasResultadosTable({
             <col style={{ width: 70 }} />
             <col style={{ width: 70 }} />
             <col style={{ width: 90 }} />
+            <col style={{ width: 50 }} />
           </colgroup>
           <thead>
             <tr>
@@ -241,6 +245,9 @@ export default function DuplasResultadosTable({
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 Para Ganhar
+              </th>
+              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+                <span className="sr-only">Ações</span>
               </th>
             </tr>
             <tr>
@@ -370,6 +377,16 @@ export default function DuplasResultadosTable({
                   <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
                     {formatTempo(dupla.paraGanhar)}
                   </span>
+                </td>
+                <td className="px-2 py-3 text-center">
+                  <button
+                    type="button"
+                    onClick={() => onDeletar?.(duplaIndex)}
+                    aria-label={`Excluir dupla — ${dupla.cabeceiroNome} & ${dupla.pezeiroNome}`}
+                    className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </td>
               </tr>
             ))}

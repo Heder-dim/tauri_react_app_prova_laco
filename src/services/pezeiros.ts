@@ -20,6 +20,10 @@ export function atualizarBateriasPezeiro(id: number, baterias: number[]): Promis
   return invoke("atualizar_baterias_pezeiro", { id, baterias });
 }
 
+export function atualizarPezeiro(id: number, nome: string, hc: number): Promise<void> {
+  return invoke("atualizar_pezeiro", { id, nome, hc });
+}
+
 export function deletarPezeiro(id: number): Promise<void> {
   return invoke("deletar_pezeiro", { id });
 }
