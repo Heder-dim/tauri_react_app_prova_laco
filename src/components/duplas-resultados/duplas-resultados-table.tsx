@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Dices, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, Dices, Trash2 } from "lucide-react";
 import Avatar from "../ui/avatar";
 import LiveBadge from "../ui/live-badge";
 
@@ -178,6 +178,32 @@ export default function DuplasResultadosTable({
     return String(inscricao);
   }
 
+  // Ordenação por Parcial ou Média — só reordena a EXIBIÇÃO (uma lista de índices), sem tocar
+  // no array `duplas` de verdade, já que os handlers de edição/exclusão/inscrição dependem do
+  // índice original pra saber qual dupla foi mexida.
+  const [ordenacao, setOrdenacao] = useState<{ campo: "parcial" | "media"; direcao: "asc" | "desc" } | null>(
+    null
+  );
+
+  function handleOrdenar(campo: "parcial" | "media") {
+    setOrdenacao((prev) => {
+      if (!prev || prev.campo !== campo) return { campo, direcao: "asc" };
+      return { campo, direcao: prev.direcao === "asc" ? "desc" : "asc" };
+    });
+  }
+
+  const indicesExibidos = useMemo(() => {
+    const indices = duplas.map((_, i) => i);
+    if (!ordenacao) return indices;
+    const sinal = ordenacao.direcao === "asc" ? 1 : -1;
+    return indices.sort((a, b) => (duplas[a][ordenacao.campo] - duplas[b][ordenacao.campo]) * sinal);
+  }, [duplas, ordenacao]);
+
+  function IconeOrdenacao({ campo }: { campo: "parcial" | "media" }) {
+    if (ordenacao?.campo !== campo) return null;
+    return ordenacao.direcao === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />;
+  }
+
   return (
     <div className="min-w-0 flex-1 rounded-2xl bg-white p-5 shadow-sm">
       {/* Cabeçalho do card */}
@@ -248,13 +274,27 @@ export default function DuplasResultadosTable({
                 Tempo de Cada Boi (seg.)
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
-                Parcial
+                <button
+                  type="button"
+                  onClick={() => handleOrdenar("parcial")}
+                  className="flex items-center gap-1 transition-colors hover:text-slate-700"
+                >
+                  Parcial
+                  <IconeOrdenacao campo="parcial" />
+                </button>
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 Boi Final
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
-                Média
+                <button
+                  type="button"
+                  onClick={() => handleOrdenar("media")}
+                  className="flex items-center gap-1 transition-colors hover:text-slate-700"
+                >
+                  Média
+                  <IconeOrdenacao campo="media" />
+                </button>
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 Para Ganhar
@@ -275,7 +315,9 @@ export default function DuplasResultadosTable({
             </tr>
           </thead>
           <tbody>
-            {duplas.map((dupla, duplaIndex) => (
+            {indicesExibidos.map((duplaIndex) => {
+              const dupla = duplas[duplaIndex];
+              return (
               <tr key={dupla.numero} className="border-b border-slate-50 last:border-0">
                 <td className="px-2 py-3 text-slate-400">
                   {String(dupla.numero).padStart(2, "0")}
@@ -402,7 +444,8 @@ export default function DuplasResultadosTable({
                   </button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

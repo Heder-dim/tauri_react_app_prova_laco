@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState } from "react";
-import { Dices, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, Dices, Trash2 } from "lucide-react";
 import Avatar from "../ui/avatar";
 import LiveBadge from "../ui/live-badge";
 
-export interface DuplaPorPezeiroRow {
+export interface DuplaRow {
   numero: number;
   inscricao: number;
-  cabeceiroIniciais: string;
-  cabeceiroNome: string;
-  hcCabeceiro: number;
+  pezeiroIniciais: string;
+  pezeiroNome: string;
+  hcPez: number;
   hcDupla: number;
   bois: number;
   /** true se a dupla foi formada pelo botão "Sortear Duplas"; false se foi manual */
@@ -25,13 +25,13 @@ export interface DuplaPorPezeiroRow {
   paraGanhar: number;
 }
 
-export interface DuplasPorPezeiroTableProps {
-  pezeiroNome: string;
-  hcPezeiro: number;
-  duplas: DuplaPorPezeiroRow[];
+export interface DuplasTableProps {
+  cabeceiroNome: string;
+  hcCabeceiro: number;
+  duplas: DuplaRow[];
   aoVivo?: boolean;
   /** Chamado sempre que um tempo ou o Boi Final é editado, já com os valores recalculados */
-  onDuplasChange?: (duplas: DuplaPorPezeiroRow[]) => void;
+  onDuplasChange?: (duplas: DuplaRow[]) => void;
   /** Chamado quando o usuário confirma a exclusão de uma dupla (o índice na lista atual) */
   onDeletar?: (duplaIndex: number) => void;
 }
@@ -50,7 +50,7 @@ function parseTempoInput(raw: string): number | null {
 }
 
 /** Recalcula Parcial (soma dos tempos 1-5) e Média (tempos 1-5 + Boi Final) */
-function recalcularParcialEMedia(dupla: DuplaPorPezeiroRow): DuplaPorPezeiroRow {
+function recalcularParcialEMedia(dupla: DuplaRow): DuplaRow {
   const temposValidos = dupla.tempos.filter((t): t is number => t !== null);
 
   const parcial = temposValidos.reduce((soma, t) => soma + t, 0);
@@ -62,17 +62,18 @@ function recalcularParcialEMedia(dupla: DuplaPorPezeiroRow): DuplaPorPezeiroRow 
   return { ...dupla, parcial, media };
 }
 
-export default function DuplasPorPezeiroTable({
-  pezeiroNome,
-  hcPezeiro,
+export default function DuplasTable({
+  cabeceiroNome,
+  hcCabeceiro,
   duplas: duplasIniciais,
   aoVivo = true,
   onDuplasChange,
   onDeletar,
-}: DuplasPorPezeiroTableProps) {
-  const [duplas, setDuplas] = useState<DuplaPorPezeiroRow[]>(duplasIniciais);
+}: DuplasTableProps) {
+  const [duplas, setDuplas] = useState<DuplaRow[]>(duplasIniciais);
 
-  // Guarda o texto exatamente como foi digitado em cada campo, pra não perder a vírgula/ponto ao reformatar.
+  // Guarda o texto exatamente como foi digitado em cada campo (chave: "tempo-<duplaIndex>-<tempoIndex>" ou "boiFinal-<duplaIndex>"),
+  // pra não perder a vírgula/ponto ao reformatar o número a cada tecla.
   const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
 
   // Marca que a próxima mudança de prop é só o "eco" de uma edição que a própria tabela acabou
@@ -81,8 +82,10 @@ export default function DuplasPorPezeiroTable({
   // devolvesse o valor recalculado.
   const ecoDaPropriaEdicaoRef = useRef(false);
 
-  // Ressincroniza sempre que o array recebido via prop mudar de fato (pezeiro trocado, dupla nova
-  // formada) — MAS só quando a mudança vem de fora (não é eco da nossa própria digitação).
+  // Ressincroniza sempre que o array recebido via prop mudar de fato — necessário porque
+  // o estado interno existe pra permitir edição local, mas não pode "ficar preso" nos dados
+  // iniciais quando o cabeceiro selecionado muda ou uma nova dupla é formada na página — MAS
+  // só quando a mudança vem de fora (não é eco da nossa própria digitação).
   useEffect(() => {
     if (ecoDaPropriaEdicaoRef.current) {
       ecoDaPropriaEdicaoRef.current = false;
@@ -102,6 +105,7 @@ export default function DuplasPorPezeiroTable({
         const novosTempos = [...dupla.tempos];
         novosTempos[tempoIndex] = parseTempoInput(rawValue);
 
+        // Editar um tempo recalcula Parcial (tempos 1-5) e Média (tempos 1-5 + Boi Final)
         return recalcularParcialEMedia({ ...dupla, tempos: novosTempos });
       });
 
@@ -111,6 +115,7 @@ export default function DuplasPorPezeiroTable({
     });
   }
 
+  /** Edição do Boi Final — campo independente dos tempos, mas entra no cálculo da Média */
   function handleBoiFinalChange(duplaIndex: number, rawValue: string) {
     setRawInputs((prev) => ({ ...prev, [`boiFinal-${duplaIndex}`]: rawValue }));
 
@@ -127,6 +132,7 @@ export default function DuplasPorPezeiroTable({
     });
   }
 
+  /** Valor mostrado no input: prioriza o texto bruto digitado; cai pro valor formatado quando ainda não foi mexido */
   function tempoInputValue(duplaIndex: number, tempoIndex: number, tempo: number | null) {
     const raw = rawInputs[`tempo-${duplaIndex}-${tempoIndex}`];
     if (raw !== undefined) return raw;
@@ -139,19 +145,45 @@ export default function DuplasPorPezeiroTable({
     return boiFinal.toString().replace(".", ",");
   }
 
+  // Ordenação por Parcial ou Média — só reordena a EXIBIÇÃO (uma lista de índices), sem tocar
+  // no array `duplas` de verdade, já que os handlers de edição/exclusão dependem do índice
+  // original pra saber qual dupla foi mexida.
+  const [ordenacao, setOrdenacao] = useState<{ campo: "parcial" | "media"; direcao: "asc" | "desc" } | null>(
+    null
+  );
+
+  function handleOrdenar(campo: "parcial" | "media") {
+    setOrdenacao((prev) => {
+      if (!prev || prev.campo !== campo) return { campo, direcao: "asc" };
+      return { campo, direcao: prev.direcao === "asc" ? "desc" : "asc" };
+    });
+  }
+
+  const indicesExibidos = useMemo(() => {
+    const indices = duplas.map((_, i) => i);
+    if (!ordenacao) return indices;
+    const sinal = ordenacao.direcao === "asc" ? 1 : -1;
+    return indices.sort((a, b) => (duplas[a][ordenacao.campo] - duplas[b][ordenacao.campo]) * sinal);
+  }, [duplas, ordenacao]);
+
+  function IconeOrdenacao({ campo }: { campo: "parcial" | "media" }) {
+    if (ordenacao?.campo !== campo) return null;
+    return ordenacao.direcao === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />;
+  }
+
   return (
     <div className="min-w-0 flex-1 rounded-2xl bg-white p-5 shadow-sm">
       {/* Cabeçalho do card */}
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="font-bold text-slate-900">
-            Duplas do Pezeiro:{" "}
-            <span className="text-blue-600">{pezeiroNome}</span>
+            Duplas do Cabeceiro:{" "}
+            <span className="text-blue-600">{cabeceiroNome}</span>
           </h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            HC Pezeiro:{" "}
+            HC Cabeceiro:{" "}
             <span className="font-semibold text-blue-600">
-              {hcPezeiro.toFixed(1).replace(".", ",")}
+              {hcCabeceiro.toFixed(1).replace(".", ",")}
             </span>{" "}
             · {duplas.length} duplas
           </p>
@@ -162,7 +194,7 @@ export default function DuplasPorPezeiroTable({
       {/* Tabela */}
       <div className="overflow-x-auto">
         <table className="border-collapse table-fixed text-sm" style={{ width: 1194 }}>
-          {/* Larguras: # / Inscrição / Cabeceiro / HC Cabeceiro / HC Dupla / Bois / 1º-6º Boi / Parcial / Boi Final / Média / Para Ganhar / Ações */}
+          {/* Larguras: # / Inscrição / Pezeiro / HC Pez. / HC Dupla / Bois / 1º-6º Boi / Parcial / Boi Final / Média / Para Ganhar / Ações */}
           <colgroup>
             <col style={{ width: 40 }} />
             <col style={{ width: 64 }} />
@@ -191,10 +223,10 @@ export default function DuplasPorPezeiroTable({
                 Inscrição
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
-                Cabeceiro
+                Pezeiro
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
-                HC Cabeceiro
+                HC Pez.
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 HC Dupla
@@ -206,13 +238,27 @@ export default function DuplasPorPezeiroTable({
                 Tempo de Cada Boi (seg.)
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
-                Parcial
+                <button
+                  type="button"
+                  onClick={() => handleOrdenar("parcial")}
+                  className="flex items-center gap-1 transition-colors hover:text-slate-700"
+                >
+                  Parcial
+                  <IconeOrdenacao campo="parcial" />
+                </button>
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 Boi Final
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
-                Média
+                <button
+                  type="button"
+                  onClick={() => handleOrdenar("media")}
+                  className="flex items-center gap-1 transition-colors hover:text-slate-700"
+                >
+                  Média
+                  <IconeOrdenacao campo="media" />
+                </button>
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 Para Ganhar
@@ -233,7 +279,9 @@ export default function DuplasPorPezeiroTable({
             </tr>
           </thead>
           <tbody>
-            {duplas.map((dupla, duplaIndex) => (
+            {indicesExibidos.map((duplaIndex) => {
+              const dupla = duplas[duplaIndex];
+              return (
               <tr key={dupla.numero} className="border-b border-slate-50 last:border-0">
                 <td className="px-2 py-3 text-slate-400">
                   {String(dupla.numero).padStart(2, "0")}
@@ -243,9 +291,9 @@ export default function DuplasPorPezeiroTable({
                 </td>
                 <td className="px-2 py-3">
                   <div className="flex items-center gap-2">
-                    <Avatar initials={dupla.cabeceiroIniciais} />
+                    <Avatar initials={dupla.pezeiroIniciais} />
                     <span className="font-semibold text-slate-900">
-                      {dupla.cabeceiroNome}
+                      {dupla.pezeiroNome}
                     </span>
                     {dupla.sorteada && (
                       <span
@@ -260,7 +308,7 @@ export default function DuplasPorPezeiroTable({
                 </td>
                 <td className="px-2 py-3">
                   <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600">
-                    {dupla.hcCabeceiro.toFixed(1).replace(".", ",")}
+                    {dupla.hcPez.toFixed(1).replace(".", ",")}
                   </span>
                 </td>
                 <td className="px-2 py-3">
@@ -281,7 +329,7 @@ export default function DuplasPorPezeiroTable({
                         value={tempoInputValue(duplaIndex, tempoIndex, tempo)}
                         placeholder="–"
                         disabled={!habilitado}
-                        aria-label={`Tempo do ${tempoIndex + 1}º boi — ${dupla.cabeceiroNome}`}
+                        aria-label={`Tempo do ${tempoIndex + 1}º boi — ${dupla.pezeiroNome}`}
                         onChange={(e) => handleTempoChange(duplaIndex, tempoIndex, e.target.value)}
                         className={`box-border w-full rounded-md border border-transparent bg-transparent px-1.5 py-1 text-center outline-none transition-colors placeholder:text-slate-300 ${
                           habilitado
@@ -307,7 +355,7 @@ export default function DuplasPorPezeiroTable({
                     type="text"
                     inputMode="decimal"
                     value={boiFinalInputValue(duplaIndex, dupla.boiFinal)}
-                    aria-label={`Boi Final — ${dupla.cabeceiroNome}`}
+                    aria-label={`Boi Final — ${dupla.pezeiroNome}`}
                     onChange={(e) => handleBoiFinalChange(duplaIndex, e.target.value)}
                     className="box-border w-full rounded-md border border-transparent bg-green-50 px-1.5 py-1 text-center font-semibold text-green-600 outline-none transition-colors hover:bg-green-100 focus:border-green-300 focus:bg-white focus:ring-2 focus:ring-green-100"
                   />
@@ -325,14 +373,15 @@ export default function DuplasPorPezeiroTable({
                   <button
                     type="button"
                     onClick={() => onDeletar?.(duplaIndex)}
-                    aria-label={`Excluir dupla — ${dupla.cabeceiroNome}`}
+                    aria-label={`Excluir dupla — ${dupla.pezeiroNome}`}
                     className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
                   >
                     <Trash2 size={16} />
                   </button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
