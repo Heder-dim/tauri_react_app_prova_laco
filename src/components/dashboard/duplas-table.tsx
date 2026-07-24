@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dices, Trash2 } from "lucide-react";
 import Avatar from "../ui/avatar";
 import LiveBadge from "../ui/live-badge";
@@ -76,10 +76,21 @@ export default function DuplasTable({
   // pra não perder a vírgula/ponto ao reformatar o número a cada tecla.
   const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
 
+  // Marca que a próxima mudança de prop é só o "eco" de uma edição que a própria tabela acabou
+  // de mandar pra página (via onDuplasChange) — nesse caso NÃO deve resetar rawInputs, senão
+  // qualquer tecla digitada (vírgula, ponto, zero à esquerda) seria apagada assim que a página
+  // devolvesse o valor recalculado.
+  const ecoDaPropriaEdicaoRef = useRef(false);
+
   // Ressincroniza sempre que o array recebido via prop mudar de fato — necessário porque
   // o estado interno existe pra permitir edição local, mas não pode "ficar preso" nos dados
-  // iniciais quando o cabeceiro selecionado muda ou uma nova dupla é formada na página.
+  // iniciais quando o cabeceiro selecionado muda ou uma nova dupla é formada na página — MAS
+  // só quando a mudança vem de fora (não é eco da nossa própria digitação).
   useEffect(() => {
+    if (ecoDaPropriaEdicaoRef.current) {
+      ecoDaPropriaEdicaoRef.current = false;
+      return;
+    }
     setDuplas(duplasIniciais);
     setRawInputs({});
   }, [duplasIniciais]);
@@ -98,6 +109,7 @@ export default function DuplasTable({
         return recalcularParcialEMedia({ ...dupla, tempos: novosTempos });
       });
 
+      ecoDaPropriaEdicaoRef.current = true;
       onDuplasChange?.(atualizado);
       return atualizado;
     });
@@ -114,6 +126,7 @@ export default function DuplasTable({
         return recalcularParcialEMedia({ ...dupla, boiFinal: novoBoiFinal });
       });
 
+      ecoDaPropriaEdicaoRef.current = true;
       onDuplasChange?.(atualizado);
       return atualizado;
     });

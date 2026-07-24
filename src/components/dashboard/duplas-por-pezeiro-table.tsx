@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dices, Trash2 } from "lucide-react";
 import Avatar from "../ui/avatar";
 import LiveBadge from "../ui/live-badge";
@@ -75,8 +75,19 @@ export default function DuplasPorPezeiroTable({
   // Guarda o texto exatamente como foi digitado em cada campo, pra não perder a vírgula/ponto ao reformatar.
   const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
 
-  // Ressincroniza sempre que o array recebido via prop mudar de fato (pezeiro trocado, dupla nova formada).
+  // Marca que a próxima mudança de prop é só o "eco" de uma edição que a própria tabela acabou
+  // de mandar pra página (via onDuplasChange) — nesse caso NÃO deve resetar rawInputs, senão
+  // qualquer tecla digitada (vírgula, ponto, zero à esquerda) seria apagada assim que a página
+  // devolvesse o valor recalculado.
+  const ecoDaPropriaEdicaoRef = useRef(false);
+
+  // Ressincroniza sempre que o array recebido via prop mudar de fato (pezeiro trocado, dupla nova
+  // formada) — MAS só quando a mudança vem de fora (não é eco da nossa própria digitação).
   useEffect(() => {
+    if (ecoDaPropriaEdicaoRef.current) {
+      ecoDaPropriaEdicaoRef.current = false;
+      return;
+    }
     setDuplas(duplasIniciais);
     setRawInputs({});
   }, [duplasIniciais]);
@@ -94,6 +105,7 @@ export default function DuplasPorPezeiroTable({
         return recalcularParcialEMedia({ ...dupla, tempos: novosTempos });
       });
 
+      ecoDaPropriaEdicaoRef.current = true;
       onDuplasChange?.(atualizado);
       return atualizado;
     });
@@ -109,6 +121,7 @@ export default function DuplasPorPezeiroTable({
         return recalcularParcialEMedia({ ...dupla, boiFinal: novoBoiFinal });
       });
 
+      ecoDaPropriaEdicaoRef.current = true;
       onDuplasChange?.(atualizado);
       return atualizado;
     });
