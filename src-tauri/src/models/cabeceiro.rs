@@ -6,5 +6,6 @@ pub struct Cabeceiro {
     pub nome: String,
     pub hc: f64,
     pub id_prova: i64,
-    pub numero_bateria: Option<i64>,
+    /// Baterias que esse cabeceiro pertence (pode estar em mais de uma). Vazio = sem bateria.
+    pub baterias: Vec<i64>,
 }

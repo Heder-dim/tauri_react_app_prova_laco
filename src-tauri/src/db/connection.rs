@@ -33,8 +33,25 @@ pub fn init_db(app: &AppHandle) -> Result<Connection, Box<dyn std::error::Error>
     let _ = conn.execute("ALTER TABLE duplas ADD COLUMN inscricao INTEGER", []);
     let _ = conn.execute("ALTER TABLE cabeceiros ADD COLUMN numero_bateria INTEGER", []);
     let _ = conn.execute("ALTER TABLE pezeiros ADD COLUMN numero_bateria INTEGER", []);
+    let _ = conn.execute("ALTER TABLE provas ADD COLUMN limite_inscricao INTEGER", []);
+    let _ = conn.execute(
+        "ALTER TABLE duplas ADD COLUMN sorteada INTEGER NOT NULL DEFAULT 0",
+        [],
+    );
 
     conn.execute_batch(SCHEMA)?;
+
+    // Migração de dados: copia o valor antigo de cabeceiros.numero_bateria/pezeiros.numero_bateria
+    // (relacionamento 1:1) pras tabelas novas cabeceiro_baterias/pezeiro_baterias (relacionamento N:N).
+    // Precisa rodar DEPOIS do schema, porque as tabelas novas só existem a partir daqui.
+    // INSERT OR IGNORE torna isso seguro de rodar toda vez que o app abre (não duplica).
+    conn.execute_batch(
+        "INSERT OR IGNORE INTO cabeceiro_baterias (id_cabeceiro, numero_bateria)
+         SELECT id, numero_bateria FROM cabeceiros WHERE numero_bateria IS NOT NULL;
+
+         INSERT OR IGNORE INTO pezeiro_baterias (id_pezeiro, numero_bateria)
+         SELECT id, numero_bateria FROM pezeiros WHERE numero_bateria IS NOT NULL;",
+    )?;
 
     Ok(conn)
 }

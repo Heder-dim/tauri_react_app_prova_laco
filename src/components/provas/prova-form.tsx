@@ -8,6 +8,7 @@ export interface NovaProva {
   categoria: CategoriaProva;
   bateria: boolean;
   bateriaNu: number | null;
+  limiteInscricao: number | null;
 }
 
 export interface ProvaFormProps {
@@ -20,6 +21,7 @@ export default function ProvaForm({ onAdd }: ProvaFormProps) {
   const [categoria, setCategoria] = useState<CategoriaProva>("Aberta");
   const [temBateria, setTemBateria] = useState(false);
   const [bateriaNuTexto, setBateriaNuTexto] = useState("2");
+  const [limiteInscricaoTexto, setLimiteInscricaoTexto] = useState("");
   const [erro, setErro] = useState<string | null>(null);
 
   function handleSubmit(e: FormEvent) {
@@ -46,12 +48,23 @@ export default function ProvaForm({ onAdd }: ProvaFormProps) {
       bateriaNu = numero;
     }
 
-    onAdd({ nome: nomeAparado, data, categoria, bateria: temBateria, bateriaNu });
+    let limiteInscricao: number | null = null;
+    if (limiteInscricaoTexto.trim()) {
+      const numero = Number(limiteInscricaoTexto);
+      if (Number.isNaN(numero) || numero < 1) {
+        setErro("Informe um limite de inscrições válido (ou deixe em branco pra não limitar).");
+        return;
+      }
+      limiteInscricao = numero;
+    }
+
+    onAdd({ nome: nomeAparado, data, categoria, bateria: temBateria, bateriaNu, limiteInscricao });
     setNome("");
     setData("");
     setCategoria("Aberta");
     setTemBateria(false);
     setBateriaNuTexto("2");
+    setLimiteInscricaoTexto("");
     setErro(null);
   }
 
@@ -143,6 +156,21 @@ export default function ProvaForm({ onAdd }: ProvaFormProps) {
               />
             </div>
           )}
+
+          <div className="flex items-center gap-2">
+            <label htmlFor="prova-limite-inscricao" className="text-xs text-slate-500">
+              Limite de inscrições por competidor
+            </label>
+            <input
+              id="prova-limite-inscricao"
+              type="text"
+              inputMode="numeric"
+              value={limiteInscricaoTexto}
+              onChange={(e) => setLimiteInscricaoTexto(e.target.value)}
+              placeholder="Sem limite"
+              className="w-24 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
         </div>
       </form>
 

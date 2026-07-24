@@ -27,6 +27,7 @@ fn map_dupla_detalhada(row: &rusqlite::Row) -> rusqlite::Result<DuplaDetalhada> 
         media: row.get(19)?,
         para_ganhar: row.get(20)?,
         ganhador: row.get::<_, i64>(21)? != 0,
+        sorteada: row.get::<_, i64>(22)? != 0,
     })
 }
 
@@ -36,7 +37,8 @@ const SELECT_DUPLA_DETALHADA: &str = "
         duplas.id_pezeiro, pezeiros.nome, pezeiros.hc,
         duplas.numero_bateria, duplas.inscricao, duplas.hc_soma, duplas.bois_nu,
         duplas.boi_1, duplas.boi_2, duplas.boi_3, duplas.boi_4, duplas.boi_5, duplas.boi_6,
-        duplas.parcial, duplas.boi_final, duplas.media, duplas.para_ganhar, duplas.ganhador
+        duplas.parcial, duplas.boi_final, duplas.media, duplas.para_ganhar, duplas.ganhador,
+        duplas.sorteada
     FROM duplas
     JOIN cabeceiros ON cabeceiros.id = duplas.id_cabeceiro
     JOIN pezeiros   ON pezeiros.id   = duplas.id_pezeiro
@@ -47,41 +49,90 @@ const SELECT_DUPLA_DETALHADA: &str = "
 pub fn criar_dupla(
     id_cabeceiro: i64,
     id_pezeiro: i64,
+    numero_bateria: Option<i64>,
     inscricao: i64,
     hc_soma: f64,
     bois_nu: i64,
+    sorteada: bool,
     db: State<DbConnection>,
 ) -> Result<Dupla, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
 
-    // A bateria da dupla é sempre derivada da bateria do cabeceiro e do pezeiro — nunca
-    // recebida do front-end — assim é impossível criar uma dupla cruzando baterias por engano.
-    let bateria_cabeceiro: Option<i64> = conn
+    // Agora que um competidor pode estar em várias baterias, a bateria da dupla vem
+    // explicitamente do front-end (a "bateria ativa" selecionada na tela) — só validamos
+    // aqui que tanto o cabeceiro quanto o pezeiro realmente pertencem a ela.
+    if let Some(bateria) = numero_bateria {
+        let cabeceiro_pertence: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM cabeceiro_baterias WHERE id_cabeceiro = ?1 AND numero_bateria = ?2)",
+                params![id_cabeceiro, bateria],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        let pezeiro_pertence: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM pezeiro_baterias WHERE id_pezeiro = ?1 AND numero_bateria = ?2)",
+                params![id_pezeiro, bateria],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+
+        if !cabeceiro_pertence || !pezeiro_pertence {
+            return Err(
+                "O cabeceiro e o pezeiro precisam pertencer à bateria selecionada pra formar dupla.".into(),
+            );
+        }
+    }
+
+    // Valida o limite de inscrições por competidor (se a prova tiver um definido).
+    let id_prova: i64 = conn
         .query_row(
-            "SELECT numero_bateria FROM cabeceiros WHERE id = ?1",
+            "SELECT id_prova FROM cabeceiros WHERE id = ?1",
             params![id_cabeceiro],
             |row| row.get(0),
         )
         .map_err(|e| e.to_string())?;
-    let bateria_pezeiro: Option<i64> = conn
+
+    let limite_inscricao: Option<i64> = conn
         .query_row(
-            "SELECT numero_bateria FROM pezeiros WHERE id = ?1",
-            params![id_pezeiro],
+            "SELECT limite_inscricao FROM provas WHERE id = ?1",
+            params![id_prova],
             |row| row.get(0),
         )
         .map_err(|e| e.to_string())?;
 
-    if bateria_cabeceiro != bateria_pezeiro {
-        return Err(
-            "O cabeceiro e o pezeiro precisam estar na mesma bateria pra formar dupla.".into(),
-        );
+    if let Some(limite) = limite_inscricao {
+        let corridas_cabeceiro: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM duplas WHERE id_cabeceiro = ?1",
+                params![id_cabeceiro],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        let corridas_pezeiro: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM duplas WHERE id_pezeiro = ?1",
+                params![id_pezeiro],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+
+        if corridas_cabeceiro >= limite {
+            return Err(format!(
+                "Esse cabeceiro já atingiu o limite de {limite} inscrições nessa prova."
+            ));
+        }
+        if corridas_pezeiro >= limite {
+            return Err(format!(
+                "Esse pezeiro já atingiu o limite de {limite} inscrições nessa prova."
+            ));
+        }
     }
-    let numero_bateria = bateria_cabeceiro;
 
     conn.execute(
-        "INSERT INTO duplas (id_cabeceiro, id_pezeiro, numero_bateria, inscricao, hc_soma, bois_nu)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![id_cabeceiro, id_pezeiro, numero_bateria, inscricao, hc_soma, bois_nu],
+        "INSERT INTO duplas (id_cabeceiro, id_pezeiro, numero_bateria, inscricao, hc_soma, bois_nu, sorteada)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![id_cabeceiro, id_pezeiro, numero_bateria, inscricao, hc_soma, bois_nu, sorteada],
     )
     .map_err(|e| e.to_string())?;
 
@@ -106,6 +157,7 @@ pub fn criar_dupla(
         media: None,
         para_ganhar: None,
         ganhador: false,
+        sorteada,
     })
 }
 

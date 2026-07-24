@@ -1,4 +1,3 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 // Se seu `npm run tauri init` já gerou um main.rs, funda este conteúdo com o que já existe
 // (mantendo o `#![cfg_attr(...)]` do topo, se houver).
 
@@ -26,11 +25,11 @@ fn main() {
             commands::provas::deletar_prova,
             commands::cabeceiros::criar_cabeceiro,
             commands::cabeceiros::listar_cabeceiros_por_prova,
-            commands::cabeceiros::atualizar_bateria_cabeceiro,
+            commands::cabeceiros::atualizar_baterias_cabeceiro,
             commands::cabeceiros::deletar_cabeceiro,
             commands::pezeiros::criar_pezeiro,
             commands::pezeiros::listar_pezeiros_por_prova,
-            commands::pezeiros::atualizar_bateria_pezeiro,
+            commands::pezeiros::atualizar_baterias_pezeiro,
             commands::pezeiros::deletar_pezeiro,
             commands::duplas::criar_dupla,
             commands::duplas::listar_duplas_por_cabeceiro,

@@ -9,7 +9,7 @@ import ImportarEmMassaModal, {
   type LinhaImportada,
 } from "../components/ui/importar-em-massa-modal";
 import {
-  atualizarBateriaPezeiro,
+  atualizarBateriasPezeiro,
   criarPezeiro,
   deletarPezeiro,
   listarPezeirosPorProva,
@@ -75,14 +75,12 @@ export default function PezeirosPage() {
     setPezeiros((prev) => [...prev, ...novosPezeiros]);
   }
 
-  async function handleAlterarBateria(id: number, numeroBateria: number | null) {
+  async function handleAlterarBaterias(id: number, baterias: number[]) {
     try {
-      await atualizarBateriaPezeiro(id, numeroBateria);
-      setPezeiros((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, numero_bateria: numeroBateria } : p))
-      );
+      await atualizarBateriasPezeiro(id, baterias);
+      setPezeiros((prev) => prev.map((p) => (p.id === id ? { ...p, baterias } : p)));
     } catch (e) {
-      setErro(typeof e === "string" ? e : "Não foi possível atualizar a bateria.");
+      setErro(typeof e === "string" ? e : "Não foi possível atualizar as baterias.");
     }
   }
 
@@ -95,7 +93,7 @@ export default function PezeirosPage() {
           <button
             type="button"
             onClick={() => setImportarAberto(true)}
-            className="flex items-center cursor-pointer gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+            className="flex items-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
           >
             <UploadCloud size={16} />
             Importar em Massa
@@ -134,7 +132,7 @@ export default function PezeirosPage() {
             pezeiros={pezeiros}
             onRemove={handleRemove}
             bateriaNu={bateriaNu}
-            onAlterarBateria={handleAlterarBateria}
+            onAlterarBaterias={handleAlterarBaterias}
           />
         )}
       </div>

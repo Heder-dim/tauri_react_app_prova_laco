@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Dices, Trash2 } from "lucide-react";
 import Avatar from "../ui/avatar";
 import LiveBadge from "../ui/live-badge";
 
@@ -10,6 +11,8 @@ export interface DuplaPorPezeiroRow {
   hcCabeceiro: number;
   hcDupla: number;
   bois: number;
+  /** true se a dupla foi formada pelo botão "Sortear Duplas"; false se foi manual */
+  sorteada: boolean;
   /** Tempos do 1º ao 6º boi, em segundos. `null` = ainda não corrido. */
   tempos: (number | null)[];
   /** Calculado automaticamente a partir de `tempos` (soma) */
@@ -29,6 +32,8 @@ export interface DuplasPorPezeiroTableProps {
   aoVivo?: boolean;
   /** Chamado sempre que um tempo ou o Boi Final é editado, já com os valores recalculados */
   onDuplasChange?: (duplas: DuplaPorPezeiroRow[]) => void;
+  /** Chamado quando o usuário confirma a exclusão de uma dupla (o índice na lista atual) */
+  onDeletar?: (duplaIndex: number) => void;
 }
 
 function formatTempo(valor: number | null) {
@@ -63,6 +68,7 @@ export default function DuplasPorPezeiroTable({
   duplas: duplasIniciais,
   aoVivo = true,
   onDuplasChange,
+  onDeletar,
 }: DuplasPorPezeiroTableProps) {
   const [duplas, setDuplas] = useState<DuplaPorPezeiroRow[]>(duplasIniciais);
 
@@ -142,8 +148,8 @@ export default function DuplasPorPezeiroTable({
 
       {/* Tabela */}
       <div className="overflow-x-auto">
-        <table className="border-collapse table-fixed text-sm" style={{ width: 1144 }}>
-          {/* Larguras: # / Inscrição / Cabeceiro / HC Cabeceiro / HC Dupla / Bois / 1º-6º Boi / Parcial / Boi Final / Média / Para Ganhar */}
+        <table className="border-collapse table-fixed text-sm" style={{ width: 1194 }}>
+          {/* Larguras: # / Inscrição / Cabeceiro / HC Cabeceiro / HC Dupla / Bois / 1º-6º Boi / Parcial / Boi Final / Média / Para Ganhar / Ações */}
           <colgroup>
             <col style={{ width: 40 }} />
             <col style={{ width: 64 }} />
@@ -161,6 +167,7 @@ export default function DuplasPorPezeiroTable({
             <col style={{ width: 70 }} />
             <col style={{ width: 70 }} />
             <col style={{ width: 90 }} />
+            <col style={{ width: 50 }} />
           </colgroup>
           <thead>
             <tr>
@@ -197,6 +204,9 @@ export default function DuplasPorPezeiroTable({
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 Para Ganhar
               </th>
+              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+                <span className="sr-only">Ações</span>
+              </th>
             </tr>
             <tr>
               {["1º Boi", "2º Boi", "3º Boi", "4º Boi", "5º Boi", "6º Boi"].map((label) => (
@@ -224,6 +234,15 @@ export default function DuplasPorPezeiroTable({
                     <span className="font-semibold text-slate-900">
                       {dupla.cabeceiroNome}
                     </span>
+                    {dupla.sorteada && (
+                      <span
+                        aria-label="Dupla formada por sorteio"
+                        title="Dupla formada por sorteio"
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600"
+                      >
+                        <Dices size={12} />
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="px-2 py-3">
@@ -288,6 +307,16 @@ export default function DuplasPorPezeiroTable({
                   <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
                     {formatTempo(dupla.paraGanhar)}
                   </span>
+                </td>
+                <td className="px-2 py-3 text-center">
+                  <button
+                    type="button"
+                    onClick={() => onDeletar?.(duplaIndex)}
+                    aria-label={`Excluir dupla — ${dupla.cabeceiroNome}`}
+                    className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </td>
               </tr>
             ))}

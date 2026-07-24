@@ -1,11 +1,12 @@
 import { Pencil, Trash2, Users } from "lucide-react";
 import Avatar from "../ui/avatar";
+import BateriaMultiSelect from "../ui/bateria-multi-select";
 
 export interface Cabeceiro {
   id: number;
   nome: string;
   hc: number;
-  numero_bateria: number | null;
+  baterias: number[];
 }
 
 export interface CabeceirosListProps {
@@ -13,7 +14,7 @@ export interface CabeceirosListProps {
   onRemove: (id: number) => void;
   /** Quantidade total de baterias da prova — se null/0, a prova não usa baterias e o seletor some */
   bateriaNu?: number | null;
-  onAlterarBateria?: (id: number, numeroBateria: number | null) => void;
+  onAlterarBaterias?: (id: number, baterias: number[]) => void;
 }
 
 function iniciaisDoNome(nome: string) {
@@ -27,9 +28,9 @@ export default function CabeceirosList({
   cabeceiros,
   onRemove,
   bateriaNu,
-  onAlterarBateria,
+  onAlterarBaterias,
 }: CabeceirosListProps) {
-  const mostrarBateria = Boolean(bateriaNu && bateriaNu > 0 && onAlterarBateria);
+  const mostrarBateria = Boolean(bateriaNu && bateriaNu > 0 && onAlterarBaterias);
 
   return (
     <div className="rounded-2xl bg-white p-5 shadow-sm">
@@ -66,24 +67,12 @@ export default function CabeceirosList({
 
               <div className="flex items-center gap-2">
                 {mostrarBateria && (
-                  <select
-                    value={cabeceiro.numero_bateria ?? ""}
-                    onChange={(e) =>
-                      onAlterarBateria!(
-                        cabeceiro.id,
-                        e.target.value === "" ? null : Number(e.target.value)
-                      )
-                    }
-                    aria-label={`Bateria de ${cabeceiro.nome}`}
-                    className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none transition-colors focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                  >
-                    <option value="">Sem bateria</option>
-                    {Array.from({ length: bateriaNu ?? 0 }, (_, i) => i + 1).map((n) => (
-                      <option key={n} value={n}>
-                        Bateria {n}
-                      </option>
-                    ))}
-                  </select>
+                  <BateriaMultiSelect
+                    baterias={cabeceiro.baterias}
+                    totalBaterias={bateriaNu ?? 0}
+                    onChange={(novasBaterias) => onAlterarBaterias!(cabeceiro.id, novasBaterias)}
+                    nomeCompetidor={cabeceiro.nome}
+                  />
                 )}
 
                 <button

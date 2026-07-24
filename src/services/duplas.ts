@@ -19,6 +19,8 @@ export interface DuplaDb {
   media: number | null;
   para_ganhar: number | null;
   ganhador: boolean;
+  /** true se a dupla foi formada pelo botão "Sortear Duplas"; false se foi manual */
+  sorteada: boolean;
 }
 
 /** Mesma coisa que DuplaDb, mas já com nome/HC do cabeceiro e do pezeiro (vem de JOIN no backend) */
@@ -32,18 +34,24 @@ export interface DuplaDetalhadaDb extends DuplaDb {
 export interface NovaDuplaDb {
   idCabeceiro: number;
   idPezeiro: number;
+  /** Bateria em que essa dupla está sendo formada (a "bateria ativa" da tela). null = prova sem baterias. */
+  numeroBateria: number | null;
   inscricao: number;
   hcSoma: number;
   boisNu: number;
+  /** true quando a dupla foi criada pelo sorteio; false quando foi formada manualmente */
+  sorteada: boolean;
 }
 
 export function criarDupla(nova: NovaDuplaDb): Promise<DuplaDb> {
   return invoke("criar_dupla", {
     idCabeceiro: nova.idCabeceiro,
     idPezeiro: nova.idPezeiro,
+    numeroBateria: nova.numeroBateria,
     inscricao: nova.inscricao,
     hcSoma: nova.hcSoma,
     boisNu: nova.boisNu,
+    sorteada: nova.sorteada,
   });
 }
 

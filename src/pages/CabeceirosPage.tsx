@@ -9,7 +9,7 @@ import ImportarEmMassaModal, {
   type LinhaImportada,
 } from "../components/ui/importar-em-massa-modal";
 import {
-  atualizarBateriaCabeceiro,
+  atualizarBateriasCabeceiro,
   criarCabeceiro,
   deletarCabeceiro,
   listarCabeceirosPorProva,
@@ -75,14 +75,12 @@ export default function CabeceirosPage() {
     setCabeceiros((prev) => [...prev, ...novosCabeceiros]);
   }
 
-  async function handleAlterarBateria(id: number, numeroBateria: number | null) {
+  async function handleAlterarBaterias(id: number, baterias: number[]) {
     try {
-      await atualizarBateriaCabeceiro(id, numeroBateria);
-      setCabeceiros((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, numero_bateria: numeroBateria } : c))
-      );
+      await atualizarBateriasCabeceiro(id, baterias);
+      setCabeceiros((prev) => prev.map((c) => (c.id === id ? { ...c, baterias } : c)));
     } catch (e) {
-      setErro(typeof e === "string" ? e : "Não foi possível atualizar a bateria.");
+      setErro(typeof e === "string" ? e : "Não foi possível atualizar as baterias.");
     }
   }
 
@@ -95,7 +93,7 @@ export default function CabeceirosPage() {
           <button
             type="button"
             onClick={() => setImportarAberto(true)}
-            className="flex items-center gap-2 cursor-pointer rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+            className="flex items-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
           >
             <UploadCloud size={16} />
             Importar em Massa
@@ -134,7 +132,7 @@ export default function CabeceirosPage() {
             cabeceiros={cabeceiros}
             onRemove={handleRemove}
             bateriaNu={bateriaNu}
-            onAlterarBateria={handleAlterarBateria}
+            onAlterarBaterias={handleAlterarBaterias}
           />
         )}
       </div>

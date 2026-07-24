@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import {Dices, UserPlus, BarChart3, Users } from "lucide-react";
+import { Download, Dices, UserPlus, BarChart3, Users } from "lucide-react";
 import PageHeader from "../components/layout/page-header";
 import StepBadge from "../components/ui/step-badge";
 import StatBox from "../components/ui/stat-box";
@@ -10,6 +10,7 @@ import DuplasPorPezeiroTable, {
 } from "../components/dashboard/duplas-por-pezeiro-table";
 import CabeceiroSelect, { type CabeceiroOption } from "../components/dashboard/cabeceiro-select";
 import PezeiroSelect, { type PezeiroOption } from "../components/dashboard/pezeiro-select";
+import ConfirmDialog from "../components/ui/confirm-dialog";
 // import RegraBoisPanel from "../components/dashboard/regra-bois-panel";
 import { calcularBoisNu } from "../lib/regras-bois";
 import { sortearBalanceado } from "../lib/sorteio";
@@ -19,6 +20,7 @@ import { type PezeiroDb, listarPezeirosPorProva } from "../services/pezeiros";
 import {
   criarDupla,
   atualizarDupla,
+  deletarDupla,
   listarDuplasPorCabeceiro,
   listarDuplasPorPezeiro,
   listarDuplasPorProva,
@@ -48,6 +50,7 @@ interface DuplaGenerica {
   hcPezeiro: number;
   hcDupla: number;
   bois: number;
+  sorteada: boolean;
   tempos: (number | null)[];
   parcial: number;
   boiFinal: number;
@@ -77,6 +80,7 @@ function paraDuplaGenerica(d: DuplaDetalhadaDb, numero: number): DuplaGenerica {
     hcPezeiro: d.hc_pezeiro,
     hcDupla: d.hc_soma ?? d.hc_cabeceiro + d.hc_pezeiro,
     bois: d.bois_nu,
+    sorteada: d.sorteada,
     tempos: boisParaTempos(d),
     parcial: d.parcial ?? 0,
     boiFinal: d.boi_final ?? 0,
@@ -95,6 +99,7 @@ function paraDuplaRow(d: DuplaGenerica): DuplaRow {
     hcPez: d.hcPezeiro,
     hcDupla: d.hcDupla,
     bois: d.bois,
+    sorteada: d.sorteada,
     tempos: d.tempos,
     parcial: d.parcial,
     boiFinal: d.boiFinal,
@@ -116,6 +121,7 @@ function paraDuplaPorPezeiroRow(d: DuplaGenerica): DuplaPorPezeiroRow {
     hcCabeceiro: d.hcCabeceiro,
     hcDupla: d.hcDupla,
     bois: d.bois,
+    sorteada: d.sorteada,
     tempos: d.tempos,
     parcial: d.parcial,
     boiFinal: d.boiFinal,
@@ -150,6 +156,7 @@ export default function DashboardPage() {
 
   const [duplas, setDuplas] = useState<DuplaGenerica[]>([]);
   const [carregandoDuplas, setCarregandoDuplas] = useState(false);
+  const [duplaParaExcluir, setDuplaParaExcluir] = useState<DuplaGenerica | null>(null);
 
   // Estado "da prova inteira" — usado pro sorteio balanceado e pra saber a próxima inscrição livre.
   const [corridasPorCabeceiro, setCorridasPorCabeceiro] = useState<Record<number, number>>({});
@@ -178,7 +185,7 @@ export default function DashboardPage() {
         setBateriaAtiva(bateriaInicial);
 
         const cabeceirosDaBateria = bateriaInicial
-          ? cabeceirosDb.filter((c) => c.numero_bateria === bateriaInicial)
+          ? cabeceirosDb.filter((c) => c.baterias.includes(bateriaInicial))
           : cabeceirosDb;
         setEntidadeFixaId(cabeceirosDaBateria[0]?.id ?? null);
 
@@ -241,14 +248,14 @@ export default function DashboardPage() {
   const cabeceirosParaSelecionar: CabeceiroOption[] = useMemo(
     () =>
       cabeceiros
-        .filter((c) => bateriaAtiva === null || c.numero_bateria === bateriaAtiva)
+        .filter((c) => bateriaAtiva === null || c.baterias.includes(bateriaAtiva))
         .map((c) => ({ id: c.id, nome: c.nome, hc: c.hc, corridas: corridasPorCabeceiro[c.id] ?? 0 })),
     [cabeceiros, corridasPorCabeceiro, bateriaAtiva]
   );
   const pezeirosParaSelecionar: PezeiroOption[] = useMemo(
     () =>
       pezeiros
-        .filter((p) => bateriaAtiva === null || p.numero_bateria === bateriaAtiva)
+        .filter((p) => bateriaAtiva === null || p.baterias.includes(bateriaAtiva))
         .map((p) => ({
           id: p.id,
           nome: p.nome,
@@ -260,18 +267,26 @@ export default function DashboardPage() {
   );
 
   // Opções pro dropdown do Card 2 (escolher o parceiro) — filtra quem já está pareado com a entidade
-  // fixa E quem não está na mesma bateria (quando a prova usa baterias).
+  // fixa, quem não pertence à bateria ativa (quando a prova usa baterias), e quem já atingiu o
+  // limite de inscrições da prova (quando houver um definido).
   const cabeceirosDisponiveis: CabeceiroOption[] = useMemo(() => {
     return cabeceiros
-      .filter((c) => bateriaAtiva === null || c.numero_bateria === bateriaAtiva)
+      .filter((c) => bateriaAtiva === null || c.baterias.includes(bateriaAtiva))
       .filter((c) => !duplas.some((d) => d.idCabeceiro === c.id))
+      .filter(
+        (c) =>
+          !prova?.limite_inscricao || (corridasPorCabeceiro[c.id] ?? 0) < prova.limite_inscricao
+      )
       .map((c) => ({ id: c.id, nome: c.nome, hc: c.hc, corridas: corridasPorCabeceiro[c.id] ?? 0 }));
-  }, [cabeceiros, duplas, corridasPorCabeceiro, bateriaAtiva]);
+  }, [cabeceiros, duplas, corridasPorCabeceiro, bateriaAtiva, prova]);
 
   const pezeirosDisponiveis: PezeiroOption[] = useMemo(() => {
     return pezeiros
-      .filter((p) => bateriaAtiva === null || p.numero_bateria === bateriaAtiva)
+      .filter((p) => bateriaAtiva === null || p.baterias.includes(bateriaAtiva))
       .filter((p) => !duplas.some((d) => d.idPezeiro === p.id))
+      .filter(
+        (p) => !prova?.limite_inscricao || (corridasPorPezeiro[p.id] ?? 0) < prova.limite_inscricao
+      )
       .map((p) => ({
         id: p.id,
         nome: p.nome,
@@ -279,7 +294,7 @@ export default function DashboardPage() {
         iniciais: iniciaisDoNome(p.nome),
         corridas: corridasPorPezeiro[p.id] ?? 0,
       }));
-  }, [pezeiros, duplas, corridasPorPezeiro, bateriaAtiva]);
+  }, [pezeiros, duplas, corridasPorPezeiro, bateriaAtiva, prova]);
 
   // Sugere a quantidade de bois (pela regra) sempre que a dupla escolhida mudar.
   useEffect(() => {
@@ -298,7 +313,7 @@ export default function DashboardPage() {
   function handleTrocarModo(novoModo: Modo) {
     setModo(novoModo);
     const lista = novoModo === "cabeceiro" ? cabeceiros : pezeiros;
-    const daBateria = lista.filter((item) => bateriaAtiva === null || item.numero_bateria === bateriaAtiva);
+    const daBateria = lista.filter((item) => bateriaAtiva === null || item.baterias.includes(bateriaAtiva));
     setEntidadeFixaId(daBateria[0]?.id ?? null);
     setParceiroId(null);
   }
@@ -306,7 +321,7 @@ export default function DashboardPage() {
   function handleTrocarBateria(novaBateria: number) {
     setBateriaAtiva(novaBateria);
     const lista = modo === "cabeceiro" ? cabeceiros : pezeiros;
-    const daBateria = lista.filter((item) => item.numero_bateria === novaBateria);
+    const daBateria = lista.filter((item) => item.baterias.includes(novaBateria));
     setEntidadeFixaId(daBateria[0]?.id ?? null);
     setParceiroId(null);
   }
@@ -335,13 +350,26 @@ export default function DashboardPage() {
     const idCabeceiro = modo === "cabeceiro" ? entidadeFixa.id : parceiro.id;
     const idPezeiro = modo === "cabeceiro" ? parceiro.id : entidadeFixa.id;
 
+    if (prova?.limite_inscricao) {
+      if ((corridasPorCabeceiro[idCabeceiro] ?? 0) >= prova.limite_inscricao) {
+        setErro(`Esse cabeceiro já atingiu o limite de ${prova.limite_inscricao} inscrições.`);
+        return;
+      }
+      if ((corridasPorPezeiro[idPezeiro] ?? 0) >= prova.limite_inscricao) {
+        setErro(`Esse pezeiro já atingiu o limite de ${prova.limite_inscricao} inscrições.`);
+        return;
+      }
+    }
+
     try {
       const nova = await criarDupla({
         idCabeceiro,
         idPezeiro,
+        numeroBateria: bateriaAtiva,
         inscricao: proximaInscricaoDisponivel,
         hcSoma,
         boisNu,
+        sorteada: false,
       });
 
       const cabeceiroEnvolvido = modo === "cabeceiro" ? entidadeFixa : parceiro;
@@ -361,6 +389,7 @@ export default function DashboardPage() {
         hcPezeiro: pezeiroEnvolvido.hc,
         hcDupla: nova.hc_soma ?? hcSoma,
         bois: nova.bois_nu,
+        sorteada: false,
         tempos: boisParaTempos(nova),
         parcial: nova.parcial ?? 0,
         boiFinal: nova.boi_final ?? 0,
@@ -421,9 +450,11 @@ export default function DashboardPage() {
         const nova = await criarDupla({
           idCabeceiro,
           idPezeiro,
+          numeroBateria: bateriaAtiva,
           inscricao: proximaInscricao,
           hcSoma,
           boisNu,
+          sorteada: true,
         });
 
         const cabeceiroEnvolvido = modo === "cabeceiro" ? entidadeFixa : parceiro;
@@ -443,6 +474,7 @@ export default function DashboardPage() {
           hcPezeiro: pezeiroEnvolvido.hc,
           hcDupla: nova.hc_soma ?? hcSoma,
           bois: nova.bois_nu,
+          sorteada: true,
           tempos: boisParaTempos(nova),
           parcial: nova.parcial ?? 0,
           boiFinal: nova.boi_final ?? 0,
@@ -532,6 +564,36 @@ export default function DashboardPage() {
     });
   }
 
+  function handleSolicitarExclusao(duplaIndex: number) {
+    const dupla = duplas[duplaIndex];
+    if (!dupla) return;
+    setDuplaParaExcluir(dupla);
+  }
+
+  async function handleConfirmarExclusao() {
+    if (!duplaParaExcluir) return;
+
+    try {
+      await deletarDupla(duplaParaExcluir.id);
+
+      setDuplas((prev) => prev.filter((d) => d.id !== duplaParaExcluir.id));
+
+      // Ajusta as contagens de corridas — a dupla excluída não conta mais pra ninguém
+      setCorridasPorCabeceiro((prev) => ({
+        ...prev,
+        [duplaParaExcluir.idCabeceiro]: Math.max(0, (prev[duplaParaExcluir.idCabeceiro] ?? 1) - 1),
+      }));
+      setCorridasPorPezeiro((prev) => ({
+        ...prev,
+        [duplaParaExcluir.idPezeiro]: Math.max(0, (prev[duplaParaExcluir.idPezeiro] ?? 1) - 1),
+      }));
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível excluir a dupla.");
+    } finally {
+      setDuplaParaExcluir(null);
+    }
+  }
+
   const tituloParceiro = modo === "cabeceiro" ? "Pezeiro" : "Cabeceiro";
   const tituloFixo = modo === "cabeceiro" ? "Cabeceiro" : "Pezeiro";
 
@@ -540,12 +602,12 @@ export default function DashboardPage() {
       <PageHeader
         title="Dashboard"
         subtitle="Selecione um cabeceiro ou pezeiro para montar as duplas"
-        // action={
-        //   <button className="flex cursor-pointer items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700">
-        //     <Download size={16} />
-        //     Exportar PDF
-        //   </button>
-        // }
+        action={
+          <button className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700">
+            <Download size={16} />
+            Exportar PDF
+          </button>
+        }
       />
 
       <div className="space-y-5 p-6 lg:p-10">
@@ -554,7 +616,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => handleTrocarModo("cabeceiro")}
-            className={`flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
               modo === "cabeceiro" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50"
             }`}
           >
@@ -564,7 +626,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => handleTrocarModo("pezeiro")}
-            className={`flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
               modo === "pezeiro" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50"
             }`}
           >
@@ -583,10 +645,10 @@ export default function DashboardPage() {
                 key={n}
                 type="button"
                 onClick={() => handleTrocarBateria(n)}
-                className={`rounded-lg  px-3 py-1.5 text-sm font-semibold transition-colors ${
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
                   bateriaAtiva === n
                     ? "bg-blue-600 text-white"
-                    : "bg-white cursor-pointer text-slate-500 shadow-sm hover:bg-slate-50"
+                    : "bg-white text-slate-500 shadow-sm hover:bg-slate-50"
                 }`}
               >
                 {n}
@@ -679,7 +741,7 @@ export default function DashboardPage() {
                     type="button"
                     onClick={handleFormarDupla}
                     disabled={!entidadeFixa || parceiroId === null}
-                    className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
                   >
                     <UserPlus size={16} />
                     Formar Dupla
@@ -704,7 +766,7 @@ export default function DashboardPage() {
                       type="button"
                       onClick={handleSortearDuplas}
                       disabled={!entidadeFixa || sorteando || !quantidadeSorteio.trim()}
-                      className="flex flex-1 items-center cursor-pointer justify-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
                     >
                       <Dices size={16} />
                       {sorteando ? "Sorteando..." : "Sortear Duplas"}
@@ -750,6 +812,7 @@ export default function DashboardPage() {
                   hcCabeceiro={entidadeFixa.hc}
                   duplas={duplas.map(paraDuplaRow)}
                   onDuplasChange={handleDuplasChange}
+                  onDeletar={handleSolicitarExclusao}
                 />
               ) : entidadeFixa && modo === "pezeiro" ? (
                 <DuplasPorPezeiroTable
@@ -757,6 +820,7 @@ export default function DashboardPage() {
                   hcPezeiro={entidadeFixa.hc}
                   duplas={duplas.map(paraDuplaPorPezeiroRow)}
                   onDuplasChange={handleDuplasChange}
+                  onDeletar={handleSolicitarExclusao}
                 />
               ) : (
                 <div className="flex flex-1 items-center justify-center rounded-2xl bg-white p-10 text-sm text-slate-400 shadow-sm">
@@ -768,6 +832,19 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={duplaParaExcluir !== null}
+        title={
+          duplaParaExcluir
+            ? `Excluir dupla "${duplaParaExcluir.cabeceiroNome} & ${duplaParaExcluir.pezeiroNome}"?`
+            : ""
+        }
+        description="Essa ação não pode ser desfeita. Os tempos e resultados dessa dupla serão perdidos."
+        confirmLabel="Excluir"
+        onConfirm={handleConfirmarExclusao}
+        onCancel={() => setDuplaParaExcluir(null)}
+      />
     </div>
   );
 }

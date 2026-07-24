@@ -15,6 +15,11 @@ CREATE TABLE IF NOT EXISTS provas (
     bateria_nu  INTEGER,                        -- quantidade total de baterias (só relevante quando bateria = 1)
     categoria   TEXT NOT NULL DEFAULT 'Aberta'
                     CHECK (categoria IN ('Aberta', 'Soma')),
+
+    -- Limite de inscrições por competidor nessa prova (cada cabeceiro/pezeiro só pode
+    -- aparecer em até essa quantidade de duplas). NULL = sem limite.
+    limite_inscricao INTEGER,
+
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
 
@@ -65,6 +70,32 @@ CREATE INDEX IF NOT EXISTS idx_pezeiros_id_prova ON pezeiros(id_prova);
 CREATE INDEX IF NOT EXISTS idx_pezeiros_numero_bateria ON pezeiros(numero_bateria);
 
 -- =========================================================
+-- cabeceiro_baterias / pezeiro_baterias
+-- Relacionamento N:N — um competidor agora pode pertencer a várias baterias.
+-- Substitui o uso de cabeceiros.numero_bateria / pezeiros.numero_bateria, que ficam
+-- na tabela só por compatibilidade com bancos antigos (não são mais escritos).
+-- =========================================================
+CREATE TABLE IF NOT EXISTS cabeceiro_baterias (
+    id_cabeceiro    INTEGER NOT NULL,
+    numero_bateria  INTEGER NOT NULL,
+
+    PRIMARY KEY (id_cabeceiro, numero_bateria),
+    FOREIGN KEY (id_cabeceiro) REFERENCES cabeceiros(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_cabeceiro_baterias_cabeceiro ON cabeceiro_baterias(id_cabeceiro);
+
+CREATE TABLE IF NOT EXISTS pezeiro_baterias (
+    id_pezeiro      INTEGER NOT NULL,
+    numero_bateria  INTEGER NOT NULL,
+
+    PRIMARY KEY (id_pezeiro, numero_bateria),
+    FOREIGN KEY (id_pezeiro) REFERENCES pezeiros(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_pezeiro_baterias_pezeiro ON pezeiro_baterias(id_pezeiro);
+
+-- =========================================================
 -- duplas
 -- =========================================================
 CREATE TABLE IF NOT EXISTS duplas (
@@ -96,6 +127,10 @@ CREATE TABLE IF NOT EXISTS duplas (
 
     ganhador        INTEGER NOT NULL DEFAULT 0   -- boolean, sem regra de unicidade por enquanto
                         CHECK (ganhador IN (0, 1)),
+
+    -- Marca se a dupla foi formada pelo botão "Sortear Duplas" (true) ou manualmente (false).
+    sorteada        INTEGER NOT NULL DEFAULT 0
+                        CHECK (sorteada IN (0, 1)),
 
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now')),

@@ -50,6 +50,7 @@ function paraLinhaDupla(d: DuplaDetalhadaDb, numero: number): DuplaComId {
     hcPez: d.hc_pezeiro,
     hcDupla: d.hc_soma ?? d.hc_cabeceiro + d.hc_pezeiro,
     bois: d.bois_nu,
+    sorteada: d.sorteada,
     tempos: boisParaTempos(d),
     parcial: d.parcial ?? 0,
     boiFinal: d.boi_final ?? 0,
@@ -368,14 +369,14 @@ export default function DuplasResultadosPage() {
           <div className="flex gap-2.5">
             <button
               onClick={handleExportarXlsx}
-              className="flex items-center cursor-pointer gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+              className="flex items-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
             >
               <FileSpreadsheet size={16} />
               Exportar XLSX
             </button>
             <button
               onClick={handleExportarPdf}
-              className="flex cursor-pointer items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700"
+              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700"
             >
               <Download size={16} />
               Exportar PDF
@@ -412,7 +413,7 @@ export default function DuplasResultadosPage() {
                   className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
                     filtroBateria === null
                       ? "bg-blue-600 text-white"
-                      : "bg-white cursor-pointer text-slate-500 shadow-sm hover:bg-slate-50"
+                      : "bg-white text-slate-500 shadow-sm hover:bg-slate-50"
                   }`}
                 >
                   Todas
@@ -425,7 +426,7 @@ export default function DuplasResultadosPage() {
                     className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
                       filtroBateria === n
                         ? "bg-blue-600 text-white"
-                        : "bg-white cursor-pointer text-slate-500 shadow-sm hover:bg-slate-50"
+                        : "bg-white text-slate-500 shadow-sm hover:bg-slate-50"
                     }`}
                   >
                     {n}
@@ -453,7 +454,7 @@ export default function DuplasResultadosPage() {
                 type="button"
                 onClick={handleSortearInscricao}
                 disabled={sorteandoInscricao || !intervaloTexto.trim()}
-                className="flex items-center cursor-pointer justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+                className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
               >
                 <Shuffle size={16} />
                 {sorteandoInscricao ? "Sorteando..." : "Sortear Inscrição"}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Dices } from "lucide-react";
 import Avatar from "../ui/avatar";
 import LiveBadge from "../ui/live-badge";
 
@@ -14,6 +15,8 @@ export interface DuplaResultadoRow {
   hcPez: number;
   hcDupla: number;
   bois: number;
+  /** true se a dupla foi formada pelo botão "Sortear Duplas"; false se foi manual */
+  sorteada: boolean;
   /** Tempos do 1º ao 6º boi, em segundos. `null` = ainda não corrido. */
   tempos: (number | null)[];
   /** Calculado automaticamente a partir de `tempos` (soma) */
@@ -294,6 +297,15 @@ export default function DuplasResultadosTable({
                     <span className="font-semibold text-slate-900">
                       {dupla.pezeiroNome}
                     </span>
+                    {dupla.sorteada && (
+                      <span
+                        aria-label="Dupla formada por sorteio"
+                        title="Dupla formada por sorteio"
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600"
+                      >
+                        <Dices size={12} />
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="px-2 py-3">

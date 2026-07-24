@@ -5,7 +5,7 @@ export interface CabeceiroDb {
   nome: string;
   hc: number;
   id_prova: number;
-  numero_bateria: number | null;
+  baterias: number[];
 }
 
 export function criarCabeceiro(nome: string, hc: number, idProva: number): Promise<CabeceiroDb> {
@@ -16,8 +16,8 @@ export function listarCabeceirosPorProva(idProva: number): Promise<CabeceiroDb[]
   return invoke("listar_cabeceiros_por_prova", { idProva });
 }
 
-export function atualizarBateriaCabeceiro(id: number, numeroBateria: number | null): Promise<void> {
-  return invoke("atualizar_bateria_cabeceiro", { id, numeroBateria });
+export function atualizarBateriasCabeceiro(id: number, baterias: number[]): Promise<void> {
+  return invoke("atualizar_baterias_cabeceiro", { id, baterias });
 }
 
 export function deletarCabeceiro(id: number): Promise<void> {

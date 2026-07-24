@@ -30,9 +30,9 @@ export default function ProvasPage() {
     }
   }
 
-  async function handleAdd({ nome, data, categoria, bateria, bateriaNu }: NovaProva) {
+  async function handleAdd({ nome, data, categoria, bateria, bateriaNu, limiteInscricao }: NovaProva) {
     try {
-      const novaProva = await criarProva({ nome, data, categoria, bateria, bateriaNu });
+      const novaProva = await criarProva({ nome, data, categoria, bateria, bateriaNu, limiteInscricao });
       setProvas((prev) => [novaProva, ...prev]);
     } catch (e) {
       setErro(typeof e === "string" ? e : "Não foi possível criar a prova.");
