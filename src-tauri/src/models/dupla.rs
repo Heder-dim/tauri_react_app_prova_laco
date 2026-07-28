@@ -22,6 +22,8 @@ pub struct Dupla {
     pub ganhador: bool,
     /// Se essa dupla foi formada pelo botão "Sortear Duplas" (true) ou manualmente (false).
     pub sorteada: bool,
+    /// Se essa dupla foi eliminada (errou um boi). Excluída do ranking/líder.
+    pub eliminada: bool,
 }
 
 /// Mesma coisa que `Dupla`, mas já vem com nome/HC do cabeceiro e do pezeiro (via JOIN),
@@ -51,4 +53,5 @@ pub struct DuplaDetalhada {
     pub para_ganhar: Option<f64>,
     pub ganhador: bool,
     pub sorteada: bool,
+    pub eliminada: bool,
 }

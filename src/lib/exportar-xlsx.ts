@@ -15,7 +15,9 @@ export async function exportarDuplasResultadosXlsx(
   const wb = XLSX.utils.book_new();
 
   // ---- Aba: Melhores Resultados ----
-  const comResultado = duplas.filter((d) => d.media > 0).sort((a, b) => a.media - b.media);
+  const comResultado = duplas
+    .filter((d) => d.media > 0 && !d.eliminada)
+    .sort((a, b) => a.media - b.media);
   const top3 = comResultado.slice(0, 3);
   const posicoes = ["1º", "2º", "3º"];
 
@@ -48,6 +50,7 @@ export async function exportarDuplasResultadosXlsx(
     "Boi Final",
     "Média",
     "Para Ganhar",
+    "Status",
   ];
 
   const linhas = duplas.map((d) => [
@@ -65,6 +68,7 @@ export async function exportarDuplasResultadosXlsx(
     d.boiFinal,
     d.media,
     d.paraGanhar,
+    d.eliminada ? "Eliminada" : "",
   ]);
 
   const abaDuplas = XLSX.utils.aoa_to_sheet([cabecalho, ...linhas]);
@@ -90,6 +94,7 @@ export async function exportarDuplasResultadosXlsx(
     { wch: 10 },
     { wch: 10 },
     { wch: 12 },
+    { wch: 11 },
   ];
 
   XLSX.utils.book_append_sheet(wb, abaDuplas, "Duplas e Resultados");

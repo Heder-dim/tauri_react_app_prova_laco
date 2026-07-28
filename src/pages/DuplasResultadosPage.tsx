@@ -6,6 +6,7 @@ import DuplasResultadosTable, {
   type DuplaResultadoRow,
 } from "../components/duplas-resultados/duplas-resultados-table";
 import LiderProvaCard from "../components/duplas-resultados/lider-prova-card";
+import ExportarPdfModal from "../components/duplas-resultados/exportar-pdf-modal";
 import ConfirmDialog from "../components/ui/confirm-dialog";
 // import RegraBoisPanelEditavel from "../components/duplas-resultados/regra-bois-panel";
 import { sortearInscricoes } from "../lib/sorteio";
@@ -53,6 +54,7 @@ function paraLinhaDupla(d: DuplaDetalhadaDb, numero: number): DuplaComId {
     hcDupla: d.hc_soma ?? d.hc_cabeceiro + d.hc_pezeiro,
     bois: d.bois_nu,
     sorteada: d.sorteada,
+    eliminada: d.eliminada,
     tempos: boisParaTempos(d),
     parcial: d.parcial ?? 0,
     boiFinal: d.boi_final ?? 0,
@@ -73,6 +75,7 @@ export default function DuplasResultadosPage() {
   const [intervaloTexto, setIntervaloTexto] = useState("3");
   const [sorteandoInscricao, setSorteandoInscricao] = useState(false);
   const [duplaParaExcluir, setDuplaParaExcluir] = useState<DuplaComId | null>(null);
+  const [pdfModalAberto, setPdfModalAberto] = useState(false);
 
   useEffect(() => {
     carregarDuplas();
@@ -95,10 +98,10 @@ export default function DuplasResultadosPage() {
     return duplasComParaGanhar.filter((d) => d.numeroBateria === filtroBateria);
   }, [duplasComParaGanhar, filtroBateria]);
 
-  /** Dupla líder da prova no momento — quem tem a menor média entre quem já tem resultado.
-   * Sempre considera a prova inteira, mesmo com filtro de bateria ativo. */
+  /** Dupla líder da prova no momento — quem tem a menor média entre quem já tem resultado
+   * e não foi eliminada. Sempre considera a prova inteira, mesmo com filtro de bateria ativo. */
   const lider = useMemo(() => {
-    const candidatas = duplas.filter((d) => d.media > 0);
+    const candidatas = duplas.filter((d) => d.media > 0 && !d.eliminada);
     if (candidatas.length === 0) return null;
     return candidatas.reduce((melhor, atual) => (atual.media < melhor.media ? atual : melhor));
   }, [duplas]);
@@ -306,6 +309,7 @@ export default function DuplasResultadosPage() {
           boiFinal: novo.boiFinal,
           parcial: novo.parcial,
           media: novo.media,
+          eliminada: novo.eliminada,
         };
       });
 
@@ -317,6 +321,7 @@ export default function DuplasResultadosPage() {
           original.boiFinal !== dupla.boiFinal ||
           original.parcial !== dupla.parcial ||
           original.media !== dupla.media ||
+          original.eliminada !== dupla.eliminada ||
           original.tempos.some((t, idx) => t !== dupla.tempos[idx]);
 
         if (!mudou) continue;
@@ -338,6 +343,7 @@ export default function DuplasResultadosPage() {
           boiFinal: dupla.boiFinal,
           media: dupla.media,
           paraGanhar: paraGanharAtualizado,
+          eliminada: dupla.eliminada,
         }).catch((e) => {
           setErro(typeof e === "string" ? e : "Não foi possível salvar a alteração.");
         });
@@ -368,9 +374,22 @@ export default function DuplasResultadosPage() {
     }
   }
 
-  async function handleExportarPdf() {
+  async function handleExportarPdfTodas() {
+    setPdfModalAberto(false);
     try {
       await exportarDuplasResultadosPdf(duplasExibidas, prova?.nome);
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível exportar o PDF.");
+    }
+  }
+
+  async function handleExportarPdfComTempo() {
+    setPdfModalAberto(false);
+    try {
+      const comTempo = duplasExibidas
+        .filter((d) => d.tempos.some((t) => t !== null))
+        .sort((a, b) => a.media - b.media);
+      await exportarDuplasResultadosPdf(comTempo, prova?.nome);
     } catch (e) {
       setErro(typeof e === "string" ? e : "Não foi possível exportar o PDF.");
     }
@@ -393,14 +412,14 @@ export default function DuplasResultadosPage() {
           <div className="flex gap-2.5">
             <button
               onClick={handleExportarXlsx}
-              className="flex items-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+              className="flex items-center gap-2 cursor-pointer rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
             >
               <FileSpreadsheet size={16} />
               Exportar XLSX
             </button>
             <button
-              onClick={handleExportarPdf}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700"
+              onClick={() => setPdfModalAberto(true)}
+              className="flex items-center gap-2 cursor-pointer rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700"
             >
               <Download size={16} />
               Exportar PDF
@@ -434,7 +453,7 @@ export default function DuplasResultadosPage() {
                 <button
                   type="button"
                   onClick={() => setFiltroBateria(null)}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  className={`rounded-lg px-3 cursor-pointer py-1.5 text-sm font-semibold transition-colors ${
                     filtroBateria === null
                       ? "bg-blue-600 text-white"
                       : "bg-white text-slate-500 shadow-sm hover:bg-slate-50"
@@ -447,7 +466,7 @@ export default function DuplasResultadosPage() {
                     key={n}
                     type="button"
                     onClick={() => setFiltroBateria(n)}
-                    className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                    className={`rounded-lg px-3 cursor-pointer py-1.5 text-sm font-semibold transition-colors ${
                       filtroBateria === n
                         ? "bg-blue-600 text-white"
                         : "bg-white text-slate-500 shadow-sm hover:bg-slate-50"
@@ -459,50 +478,57 @@ export default function DuplasResultadosPage() {
               </div>
             )}
 
-            <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-white p-4 shadow-sm">
-              <div>
-                <label htmlFor="intervalo" className="mb-1.5 block text-xs text-slate-500">
-                  Intervalo mínimo entre corridas
-                </label>
-                <input
-                  id="intervalo"
-                  type="text"
-                  inputMode="numeric"
-                  value={intervaloTexto}
-                  onChange={(e) => setIntervaloTexto(e.target.value)}
-                  placeholder="Ex: 3"
-                  className="w-24 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                />
+            <div className="flex flex-col gap-5 lg:flex-row">
+              <div className="flex flex-1 flex-wrap items-end gap-3 rounded-2xl bg-white p-4 shadow-sm">
+                <div>
+                  <label htmlFor="intervalo" className="mb-1.5 block text-xs text-slate-500">
+                    Intervalo mínimo entre corridas
+                  </label>
+                  <input
+                    id="intervalo"
+                    type="text"
+                    inputMode="numeric"
+                    value={intervaloTexto}
+                    onChange={(e) => setIntervaloTexto(e.target.value)}
+                    placeholder="Ex: 3"
+                    className="w-24 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSortearInscricao}
+                  disabled={sorteandoInscricao || !intervaloTexto.trim()}
+                  className="flex items-center cursor-pointer justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+                >
+                  <Shuffle size={16} />
+                  {sorteandoInscricao ? "Sorteando..." : "Sortear Inscrição"}
+                </button>
+                <p className="text-xs text-slate-400">
+                  {prova?.bateria
+                    ? "Reembaralha a ordem de inscrição de cada bateria separadamente (cada uma vira um bloco contínuo), respeitando o intervalo sempre que possível."
+                    : "Reembaralha a ordem de inscrição de todas as duplas, respeitando o intervalo sempre que possível."}
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={handleSortearInscricao}
-                disabled={sorteandoInscricao || !intervaloTexto.trim()}
-                className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
-              >
-                <Shuffle size={16} />
-                {sorteandoInscricao ? "Sorteando..." : "Sortear Inscrição"}
-              </button>
-              <p className="text-xs text-slate-400">
-                {prova?.bateria
-                  ? "Reembaralha a ordem de inscrição de cada bateria separadamente (cada uma vira um bloco contínuo), respeitando o intervalo sempre que possível."
-                  : "Reembaralha a ordem de inscrição de todas as duplas, respeitando o intervalo sempre que possível."}
-              </p>
+
+              <LiderProvaCard lider={lider} />
             </div>
 
-            <div className="flex flex-col gap-5 lg:flex-row">
-              <DuplasResultadosTable
-                duplas={duplasExibidas}
-                onDuplasChange={handleDuplasChange}
-                onInscricaoChange={handleInscricaoChange}
-                onDeletar={handleSolicitarExclusao}
-              />
-              <LiderProvaCard lider={lider} />
-              {/* <RegraBoisPanelEditavel /> */}
-            </div>
+            <DuplasResultadosTable
+              duplas={duplasExibidas}
+              onDuplasChange={handleDuplasChange}
+              onInscricaoChange={handleInscricaoChange}
+              onDeletar={handleSolicitarExclusao}
+            />
           </>
         )}
       </div>
+
+      <ExportarPdfModal
+        open={pdfModalAberto}
+        onExportarTodas={handleExportarPdfTodas}
+        onExportarComTempo={handleExportarPdfComTempo}
+        onClose={() => setPdfModalAberto(false)}
+      />
 
       <ConfirmDialog
         open={duplaParaExcluir !== null}

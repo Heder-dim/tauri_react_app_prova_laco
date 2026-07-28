@@ -21,6 +21,8 @@ export interface DuplaDb {
   ganhador: boolean;
   /** true se a dupla foi formada pelo botão "Sortear Duplas"; false se foi manual */
   sorteada: boolean;
+  /** true se a dupla foi eliminada (errou um boi) — excluída do ranking/líder */
+  eliminada: boolean;
 }
 
 /** Mesma coisa que DuplaDb, mas já com nome/HC do cabeceiro e do pezeiro (vem de JOIN no backend) */
@@ -79,6 +81,7 @@ export interface AtualizarDuplaDb {
   boiFinal: number | null;
   media: number | null;
   paraGanhar: number | null;
+  eliminada: boolean;
 }
 
 export function atualizarDupla(dados: AtualizarDuplaDb): Promise<void> {
@@ -94,6 +97,7 @@ export function atualizarDupla(dados: AtualizarDuplaDb): Promise<void> {
     boiFinal: dados.boiFinal,
     media: dados.media,
     paraGanhar: dados.paraGanhar,
+    eliminada: dados.eliminada,
   });
 }
 

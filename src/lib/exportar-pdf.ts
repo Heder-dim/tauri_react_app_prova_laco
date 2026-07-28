@@ -8,6 +8,18 @@ function formatTempo(valor: number | null | undefined) {
   return valor.toFixed(3).replace(".", ",");
 }
 
+/**
+ * Formata um tempo de boi específico, considerando quantos bois a dupla realmente corre:
+ * - slot além da quantidade de bois da dupla (ex: 4º-6º quando `bois` é 3) → "XXXXX" (não será usado)
+ * - dentro da quantidade, mas ainda sem tempo lançado → "" (vazio, sem o "–")
+ * - com tempo lançado → o valor formatado normalmente
+ */
+function formatTempoSlot(valor: number | null | undefined, slotIndex: number, bois: number) {
+  if (slotIndex >= bois) return "XXXXX";
+  if (valor === null || valor === undefined) return "";
+  return valor.toFixed(3).replace(".", ",");
+}
+
 function formatHc(valor: number) {
   return valor.toFixed(1).replace(".", ",");
 }
@@ -45,8 +57,10 @@ export async function exportarDuplasResultadosPdf(
 
   let y = 80;
 
-  // ---- Top 3 melhores resultados (menor média, entre quem já tem resultado) ----
-  const comResultado = duplas.filter((d) => d.media > 0).sort((a, b) => a.media - b.media);
+  // ---- Top 3 melhores resultados (menor média, entre quem já tem resultado e não foi eliminada) ----
+  const comResultado = duplas
+    .filter((d) => d.media > 0 && !d.eliminada)
+    .sort((a, b) => a.media - b.media);
   const top3 = comResultado.slice(0, 3);
 
   if (top3.length > 0) {
@@ -96,6 +110,7 @@ export async function exportarDuplasResultadosPdf(
     "Boi Final",
     "Média",
     "Para Ganhar",
+    "Status",
   ];
 
   const corpo = duplas.map((d) => [
@@ -108,11 +123,12 @@ export async function exportarDuplasResultadosPdf(
     formatHc(d.hcPez),
     formatHc(d.hcDupla),
     String(d.bois),
-    ...Array.from({ length: 6 }, (_, i) => formatTempo(d.tempos[i])),
+    ...Array.from({ length: 6 }, (_, i) => formatTempoSlot(d.tempos[i], i, d.bois)),
     formatTempo(d.parcial),
     formatTempo(d.boiFinal),
     formatTempo(d.media),
     formatTempo(d.paraGanhar),
+    d.eliminada ? "ELIMINADA" : "",
   ]);
 
   autoTable(doc, {
@@ -122,6 +138,13 @@ export async function exportarDuplasResultadosPdf(
     styles: { fontSize: 7, cellPadding: 3 },
     headStyles: { fillColor: [37, 99, 235] },
     margin: { left: 20, right: 20 },
+    // Pinta a linha inteira com um vermelho claro quando a dupla foi eliminada
+    didParseCell: (data) => {
+      if (data.section === "body" && duplas[data.row.index]?.eliminada) {
+        data.cell.styles.fillColor = [254, 226, 226];
+        data.cell.styles.textColor = [153, 27, 27];
+      }
+    },
   });
 
   const nomeArquivo = nomeProva

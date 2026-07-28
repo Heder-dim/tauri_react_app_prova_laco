@@ -38,6 +38,10 @@ pub fn init_db(app: &AppHandle) -> Result<Connection, Box<dyn std::error::Error>
         "ALTER TABLE duplas ADD COLUMN sorteada INTEGER NOT NULL DEFAULT 0",
         [],
     );
+    let _ = conn.execute(
+        "ALTER TABLE duplas ADD COLUMN eliminada INTEGER NOT NULL DEFAULT 0",
+        [],
+    );
 
     conn.execute_batch(SCHEMA)?;
 

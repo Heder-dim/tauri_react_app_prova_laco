@@ -132,6 +132,11 @@ CREATE TABLE IF NOT EXISTS duplas (
     sorteada        INTEGER NOT NULL DEFAULT 0
                         CHECK (sorteada IN (0, 1)),
 
+    -- Marca se a dupla foi eliminada (errou um boi). Excluída do ranking/líder/exportações
+    -- de resultado, mas continua na tabela — os tempos que já tinham sido lançados permanecem.
+    eliminada       INTEGER NOT NULL DEFAULT 0
+                        CHECK (eliminada IN (0, 1)),
+
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
 

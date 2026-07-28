@@ -2,14 +2,17 @@ export interface DuplaParaCalculoParaGanhar {
   bois: number;
   parcial: number;
   media: number;
+  eliminada: boolean;
 }
 
 /**
- * Menor média entre as duplas que já têm resultado registrado (média > 0).
- * Equivale ao $R$2 da planilha original — representa a média do líder atual.
+ * Menor média entre as duplas que já têm resultado registrado (média > 0) e não foram
+ * eliminadas. Equivale ao $R$2 da planilha original — representa a média do líder atual.
+ * Uma dupla eliminada não pode "puxar a régua" pra baixo pras demais, já que ela mesma
+ * está fora da disputa.
  */
 export function calcularMenorMedia(duplas: DuplaParaCalculoParaGanhar[]): number | null {
-  const medias = duplas.filter((d) => d.media > 0).map((d) => d.media);
+  const medias = duplas.filter((d) => d.media > 0 && !d.eliminada).map((d) => d.media);
   return medias.length > 0 ? Math.min(...medias) : null;
 }
 

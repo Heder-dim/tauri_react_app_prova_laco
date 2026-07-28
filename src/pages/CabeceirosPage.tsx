@@ -103,7 +103,7 @@ export default function CabeceirosPage() {
           <button
             type="button"
             onClick={() => setImportarAberto(true)}
-            className="flex items-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+            className="flex cursor-pointer items-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
           >
             <UploadCloud size={16} />
             Importar em Massa
