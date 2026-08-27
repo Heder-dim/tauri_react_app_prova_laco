@@ -42,6 +42,8 @@ pub fn init_db(app: &AppHandle) -> Result<Connection, Box<dyn std::error::Error>
         "ALTER TABLE duplas ADD COLUMN eliminada INTEGER NOT NULL DEFAULT 0",
         [],
     );
+    let _ = conn.execute("ALTER TABLE cabeceiros ADD COLUMN id_banco_cabeceiro INTEGER", []);
+    let _ = conn.execute("ALTER TABLE pezeiros ADD COLUMN id_banco_pezeiro INTEGER", []);
 
     conn.execute_batch(SCHEMA)?;
 
@@ -57,5 +59,42 @@ pub fn init_db(app: &AppHandle) -> Result<Connection, Box<dyn std::error::Error>
          SELECT id, numero_bateria FROM pezeiros WHERE numero_bateria IS NOT NULL;",
     )?;
 
+    // Migração de dados: cria um registro no banco global (banco_cabeceiros/banco_pezeiros)
+    // pra cada cabeceiro/pezeiro que ainda não tem `id_banco_cabeceiro`/`id_banco_pezeiro`
+    // preenchido — ou seja, todo mundo cadastrado antes dessa funcionalidade existir.
+    // Precisa ser feito linha a linha (não dá pra fazer num único INSERT...SELECT porque cada
+    // linha precisa do id recém-gerado da linha correspondente no banco). Safe de rodar toda
+    // vez que o app abre: só migra quem ainda está com o campo NULL.
+    migrar_para_banco_de_competidores(&conn, "cabeceiros", "banco_cabeceiros", "id_banco_cabeceiro")?;
+    migrar_para_banco_de_competidores(&conn, "pezeiros", "banco_pezeiros", "id_banco_pezeiro")?;
+
     Ok(conn)
+}
+
+/// Copia nome/hc de cada linha de `tabela_participacao` (cabeceiros ou pezeiros) que ainda não
+/// tem `coluna_fk` preenchida pra uma nova linha em `tabela_banco`, e liga uma na outra.
+fn migrar_para_banco_de_competidores(
+    conn: &Connection,
+    tabela_participacao: &str,
+    tabela_banco: &str,
+    coluna_fk: &str,
+) -> rusqlite::Result<()> {
+    let sql_select = format!(
+        "SELECT id, nome, hc FROM {tabela_participacao} WHERE {coluna_fk} IS NULL"
+    );
+    let mut stmt = conn.prepare(&sql_select)?;
+    let pendentes: Vec<(i64, String, f64)> = stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let sql_insert = format!("INSERT INTO {tabela_banco} (nome, hc) VALUES (?1, ?2)");
+    let sql_update = format!("UPDATE {tabela_participacao} SET {coluna_fk} = ?1 WHERE id = ?2");
+
+    for (id_participacao, nome, hc) in pendentes {
+        conn.execute(&sql_insert, rusqlite::params![nome, hc])?;
+        let id_banco = conn.last_insert_rowid();
+        conn.execute(&sql_update, rusqlite::params![id_banco, id_participacao])?;
+    }
+
+    Ok(())
 }
