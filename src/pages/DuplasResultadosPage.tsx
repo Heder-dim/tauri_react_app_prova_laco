@@ -10,7 +10,7 @@ import ExportarPdfModal from "../components/duplas-resultados/exportar-pdf-modal
 import ConfirmDialog from "../components/ui/confirm-dialog";
 // import RegraBoisPanelEditavel from "../components/duplas-resultados/regra-bois-panel";
 import { sortearInscricoes } from "../lib/sorteio";
-import { calcularMenorMedia, calcularParaGanhar } from "../lib/para-ganhar";
+import { calcularMenorMedia, calcularParaGanhar, calcularSomaTempos, MEDIA_INCOMPLETA } from "../lib/para-ganhar";
 import { exportarDuplasResultadosPdf } from "../lib/exportar-pdf";
 import { exportarDuplasResultadosXlsx } from "../lib/exportar-xlsx";
 import { type ProvaDb, buscarProva } from "../services/provas";
@@ -56,9 +56,9 @@ function paraLinhaDupla(d: DuplaDetalhadaDb, numero: number): DuplaComId {
     sorteada: d.sorteada,
     eliminada: d.eliminada,
     tempos: boisParaTempos(d),
-    parcial: d.parcial ?? 0,
-    boiFinal: d.boi_final ?? 0,
-    media: d.media ?? 0,
+    parcial: d.parcial,
+    boiFinal: d.boi_final,
+    media: d.media ?? MEDIA_INCOMPLETA,
     paraGanhar: d.para_ganhar ?? 0,
   };
 }
@@ -83,12 +83,14 @@ export default function DuplasResultadosPage() {
   }, [idProvaNum]);
 
   /** "Para Ganhar" recalculado ao vivo — muda sempre que a média de qualquer dupla muda.
-   * Sempre calculado sobre TODAS as duplas da prova, mesmo com filtro de bateria ativo. */
+   * Sempre calculado sobre TODAS as duplas da prova, mesmo com filtro de bateria ativo.
+   * Usa a SOMA bruta dos tempos (não o campo "Parcial", que agora é uma média e só existe
+   * quando a dupla está completa) — é assim que a fórmula original sempre funcionou. */
   const duplasComParaGanhar = useMemo(() => {
     const menorMedia = calcularMenorMedia(duplas);
     return duplas.map((d) => ({
       ...d,
-      paraGanhar: calcularParaGanhar(d.bois, d.parcial, menorMedia),
+      paraGanhar: calcularParaGanhar(d.bois, calcularSomaTempos(d.tempos, d.bois), menorMedia),
     }));
   }, [duplas]);
 
@@ -99,9 +101,10 @@ export default function DuplasResultadosPage() {
   }, [duplasComParaGanhar, filtroBateria]);
 
   /** Dupla líder da prova no momento — quem tem a menor média entre quem já tem resultado
-   * e não foi eliminada. Sempre considera a prova inteira, mesmo com filtro de bateria ativo. */
+   * válido (não incompleta, não eliminada). Sempre considera a prova inteira, mesmo com
+   * filtro de bateria ativo. */
   const lider = useMemo(() => {
-    const candidatas = duplas.filter((d) => d.media > 0 && !d.eliminada);
+    const candidatas = duplas.filter((d) => !d.eliminada && d.media !== MEDIA_INCOMPLETA);
     if (candidatas.length === 0) return null;
     return candidatas.reduce((melhor, atual) => (atual.media < melhor.media ? atual : melhor));
   }, [duplas]);
@@ -328,7 +331,11 @@ export default function DuplasResultadosPage() {
 
         // Recalcula o Para Ganhar com a média mais atual (incluindo a mudança que acabou de acontecer)
         const menorMediaAtual = calcularMenorMedia(novoEstado);
-        const paraGanharAtualizado = calcularParaGanhar(dupla.bois, dupla.parcial, menorMediaAtual);
+        const paraGanharAtualizado = calcularParaGanhar(
+          dupla.bois,
+          calcularSomaTempos(dupla.tempos, dupla.bois),
+          menorMediaAtual
+        );
 
         const { boi1, boi2, boi3, boi4, boi5, boi6 } = temposParaBois(dupla.tempos);
         atualizarDupla({
@@ -412,14 +419,14 @@ export default function DuplasResultadosPage() {
           <div className="flex gap-2.5">
             <button
               onClick={handleExportarXlsx}
-              className="flex items-center gap-2 cursor-pointer rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+              className="flex items-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
             >
               <FileSpreadsheet size={16} />
               Exportar XLSX
             </button>
             <button
               onClick={() => setPdfModalAberto(true)}
-              className="flex items-center gap-2 cursor-pointer rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700"
+              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700"
             >
               <Download size={16} />
               Exportar PDF
@@ -453,7 +460,7 @@ export default function DuplasResultadosPage() {
                 <button
                   type="button"
                   onClick={() => setFiltroBateria(null)}
-                  className={`rounded-lg px-3 cursor-pointer py-1.5 text-sm font-semibold transition-colors ${
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
                     filtroBateria === null
                       ? "bg-blue-600 text-white"
                       : "bg-white text-slate-500 shadow-sm hover:bg-slate-50"
@@ -466,7 +473,7 @@ export default function DuplasResultadosPage() {
                     key={n}
                     type="button"
                     onClick={() => setFiltroBateria(n)}
-                    className={`rounded-lg px-3 cursor-pointer py-1.5 text-sm font-semibold transition-colors ${
+                    className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
                       filtroBateria === n
                         ? "bg-blue-600 text-white"
                         : "bg-white text-slate-500 shadow-sm hover:bg-slate-50"
@@ -498,7 +505,7 @@ export default function DuplasResultadosPage() {
                   type="button"
                   onClick={handleSortearInscricao}
                   disabled={sorteandoInscricao || !intervaloTexto.trim()}
-                  className="flex items-center cursor-pointer justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
                 >
                   <Shuffle size={16} />
                   {sorteandoInscricao ? "Sorteando..." : "Sortear Inscrição"}

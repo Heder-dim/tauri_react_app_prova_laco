@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { DuplaResultadoRow } from "../components/duplas-resultados/duplas-resultados-table";
 import { salvarArquivo } from "./salvar-arquivo";
+import { MEDIA_INCOMPLETA } from "./para-ganhar";
 
 function formatTempo(valor: number | null | undefined) {
   if (valor === null || valor === undefined) return "–";
@@ -57,9 +58,9 @@ export async function exportarDuplasResultadosPdf(
 
   let y = 80;
 
-  // ---- Top 3 melhores resultados (menor média, entre quem já tem resultado e não foi eliminada) ----
+  // ---- Top 3 melhores resultados (menor média, entre quem tem resultado válido e não foi eliminada) ----
   const comResultado = duplas
-    .filter((d) => d.media > 0 && !d.eliminada)
+    .filter((d) => !d.eliminada && d.media !== MEDIA_INCOMPLETA)
     .sort((a, b) => a.media - b.media);
   const top3 = comResultado.slice(0, 3);
 

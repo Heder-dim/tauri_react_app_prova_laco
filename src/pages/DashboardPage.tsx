@@ -53,8 +53,11 @@ interface DuplaGenerica {
   sorteada: boolean;
   eliminada: boolean;
   tempos: (number | null)[];
-  parcial: number;
-  boiFinal: number;
+  /** Média dos tempos, só quando todos os bois foram lançados (bate com a planilha original) */
+  parcial: number | null;
+  /** `null` = ainda não lançado */
+  boiFinal: number | null;
+  /** 120 (valor "castigo") quando a dupla está incompleta */
   media: number;
   paraGanhar: number;
 }
@@ -84,8 +87,8 @@ function paraDuplaGenerica(d: DuplaDetalhadaDb, numero: number): DuplaGenerica {
     sorteada: d.sorteada,
     eliminada: d.eliminada,
     tempos: boisParaTempos(d),
-    parcial: d.parcial ?? 0,
-    boiFinal: d.boi_final ?? 0,
+    parcial: d.parcial,
+    boiFinal: d.boi_final,
     media: d.media ?? 0,
     paraGanhar: d.para_ganhar ?? 0,
   };
@@ -396,8 +399,8 @@ export default function DashboardPage() {
         sorteada: false,
         eliminada: false,
         tempos: boisParaTempos(nova),
-        parcial: nova.parcial ?? 0,
-        boiFinal: nova.boi_final ?? 0,
+        parcial: nova.parcial,
+        boiFinal: nova.boi_final,
         media: nova.media ?? 0,
         paraGanhar: nova.para_ganhar ?? 0,
       };
@@ -482,8 +485,8 @@ export default function DashboardPage() {
           sorteada: true,
           eliminada: false,
           tempos: boisParaTempos(nova),
-          parcial: nova.parcial ?? 0,
-          boiFinal: nova.boi_final ?? 0,
+          parcial: nova.parcial,
+          boiFinal: nova.boi_final,
           media: nova.media ?? 0,
           paraGanhar: nova.para_ganhar ?? 0,
         });
@@ -522,8 +525,8 @@ export default function DashboardPage() {
     const comId = atualizado as unknown as Array<{
       id: number;
       tempos: (number | null)[];
-      boiFinal: number;
-      parcial: number;
+      boiFinal: number | null;
+      parcial: number | null;
       media: number;
       eliminada: boolean;
     }>;
@@ -619,7 +622,7 @@ export default function DashboardPage() {
         title="Dashboard"
         subtitle="Selecione um cabeceiro ou pezeiro para montar as duplas"
         action={
-          <button className="flex items-center cursor-pointer gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700">
+          <button className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700">
             <Download size={16} />
             Exportar PDF
           </button>
@@ -632,7 +635,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => handleTrocarModo("cabeceiro")}
-            className={`flex items-center cursor-pointer gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
               modo === "cabeceiro" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50"
             }`}
           >
@@ -642,7 +645,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => handleTrocarModo("pezeiro")}
-            className={`flex items-center cursor-pointer gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
               modo === "pezeiro" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50"
             }`}
           >
@@ -661,7 +664,7 @@ export default function DashboardPage() {
                 key={n}
                 type="button"
                 onClick={() => handleTrocarBateria(n)}
-                className={`rounded-lg cursor-pointer px-3 py-1.5 text-sm font-semibold transition-colors ${
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
                   bateriaAtiva === n
                     ? "bg-blue-600 text-white"
                     : "bg-white text-slate-500 shadow-sm hover:bg-slate-50"
@@ -757,7 +760,7 @@ export default function DashboardPage() {
                     type="button"
                     onClick={handleFormarDupla}
                     disabled={!entidadeFixa || parceiroId === null}
-                    className="flex flex-1 items-center cursor-pointer justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
                   >
                     <UserPlus size={16} />
                     Formar Dupla
@@ -782,7 +785,7 @@ export default function DashboardPage() {
                       type="button"
                       onClick={handleSortearDuplas}
                       disabled={!entidadeFixa || sorteando || !quantidadeSorteio.trim()}
-                      className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
                     >
                       <Dices size={16} />
                       {sorteando ? "Sorteando..." : "Sortear Duplas"}

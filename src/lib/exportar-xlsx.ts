@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import type { DuplaResultadoRow } from "../components/duplas-resultados/duplas-resultados-table";
 import { salvarArquivo } from "./salvar-arquivo";
+import { MEDIA_INCOMPLETA } from "./para-ganhar";
 
 /**
  * Gera a planilha de "Duplas e Resultados" (aba com os 3 melhores resultados + aba
@@ -16,7 +17,7 @@ export async function exportarDuplasResultadosXlsx(
 
   // ---- Aba: Melhores Resultados ----
   const comResultado = duplas
-    .filter((d) => d.media > 0 && !d.eliminada)
+    .filter((d) => !d.eliminada && d.media !== MEDIA_INCOMPLETA)
     .sort((a, b) => a.media - b.media);
   const top3 = comResultado.slice(0, 3);
   const posicoes = ["1º", "2º", "3º"];
