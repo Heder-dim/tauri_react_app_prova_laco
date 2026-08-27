@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { LayoutGrid, Users, User, Trophy, Menu, X, type LucideIcon } from "lucide-react";
 
-type MenuLabel = "Provas" | "Formar Duplas" | "Cabeceiros" | "Pezeiros" | "Duplas e Resultados";
+type MenuLabel =
+  | "Provas"
+  | "Banco de Cabeceiros"
+  | "Banco de Pezeiros"
+  | "Dashboard"
+  | "Cabeceiros"
+  | "Pezeiros"
+  | "Duplas e Resultados";
 
 interface MenuItem {
   label: MenuLabel;
@@ -9,14 +16,16 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { label: "Formar Duplas", icon: LayoutGrid },
-  { label: "Duplas e Resultados", icon: Trophy },
+  { label: "Dashboard", icon: LayoutGrid },
   { label: "Cabeceiros", icon: Users },
   { label: "Pezeiros", icon: User },
+  { label: "Duplas e Resultados", icon: Trophy },
 ];
 
 const FIRST_MENU_ITEMS: MenuItem[] = [
   { label: "Provas", icon: LayoutGrid },
+  { label: "Banco de Cabeceiros", icon: Users },
+  { label: "Banco de Pezeiros", icon: User },
 ];
 
 export interface SidebarProps {
@@ -45,13 +54,14 @@ function LogoMark() {
 }
 
 export default function Sidebar({
-  active = "Formar Duplas",
+  active = "Dashboard",
   onNavigate = () => {},
 }: SidebarProps) {
   const [open, setOpen] = useState(false);
 
-  // Quando "Provas" está ativo, o Menu Principal fica bloqueado
-  const isProvasActive = active === "Provas";
+  // Quando alguma página "de topo" está ativa (sem contexto de prova), o Menu Principal fica bloqueado
+  const isProvasActive =
+    active === "Provas" || active === "Banco de Cabeceiros" || active === "Banco de Pezeiros";
 
   function handleSelect(label: MenuLabel, disabled = false) {
     if (disabled) return;
@@ -91,7 +101,7 @@ export default function Sidebar({
 
       {/* Sidebar — fixa em desktop, drawer deslizante em mobile */}
       <aside
-        className={`fixed left-0 top-0 z-50 flex h-screen w-58 shrink-0 flex-col
+        className={`fixed left-0 top-0 z-50 flex h-screen w-72 shrink-0 flex-col
           bg-[#0b1220] transition-transform duration-300 ease-in-out
           ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
       >

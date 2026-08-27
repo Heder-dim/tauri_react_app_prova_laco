@@ -7,6 +7,8 @@ import ProvasPage from "./pages/ProvasPage";
 import CabeceirosPage from "./pages/CabeceirosPage";
 import PezeirosPage from "./pages/PezeirosPage";
 import DuplasResultadosPage from "./pages/DuplasResultadosPage";
+import BancoCabeceirosPage from "./pages/BancoCabeceirosPage";
+import BancoPezeirosPage from "./pages/BancoPezeirosPage";
 
 function Layout() {
   const navigate = useNavigate();
@@ -27,6 +29,8 @@ function Layout() {
       <main className="p-6 lg:ml-72 lg:p-10">
         <Routes>
           <Route path="/" element={<ProvasPage />} />
+          <Route path="/banco/cabeceiros" element={<BancoCabeceirosPage />} />
+          <Route path="/banco/pezeiros" element={<BancoPezeirosPage />} />
 
           <Route path="/provas/:idProva/dashboard" element={<DashboardPage />} />
           <Route path="/provas/:idProva/cabeceiros" element={<CabeceirosPage />} />
