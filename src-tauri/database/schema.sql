@@ -15,6 +15,11 @@ CREATE TABLE IF NOT EXISTS provas (
     bateria_nu  INTEGER,                        -- quantidade total de baterias (só relevante quando bateria = 1)
     categoria   TEXT NOT NULL DEFAULT 'Aberta'
                     CHECK (categoria IN ('Aberta', 'Soma')),
+
+    -- Limite de inscrições por competidor nessa prova (cada cabeceiro/pezeiro só pode
+    -- aparecer em até essa quantidade de duplas). NULL = sem limite.
+    limite_inscricao INTEGER,
+
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
 
@@ -22,36 +27,121 @@ CREATE TABLE IF NOT EXISTS provas (
 );
 
 -- =========================================================
--- cabeceiros
+-- banco_cabeceiros / banco_pezeiros
+-- Cadastro GLOBAL de competidores, independente de prova. Nome e HC vivem aqui —
+-- cabeceiros/pezeiros (por prova) só referenciam esse registro, nunca guardam a
+-- informação "de verdade" deles. Editar aqui reflete em todas as provas de uma vez.
 -- =========================================================
-CREATE TABLE IF NOT EXISTS cabeceiros (
+CREATE TABLE IF NOT EXISTS banco_cabeceiros (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     nome        TEXT NOT NULL,
     hc          REAL NOT NULL,
-    id_prova    INTEGER NOT NULL,
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
-    FOREIGN KEY (id_prova) REFERENCES provas(id) ON DELETE CASCADE
+CREATE INDEX IF NOT EXISTS idx_banco_cabeceiros_nome ON banco_cabeceiros(nome);
+
+CREATE TABLE IF NOT EXISTS banco_pezeiros (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome        TEXT NOT NULL,
+    hc          REAL NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_banco_pezeiros_nome ON banco_pezeiros(nome);
+
+-- =========================================================
+-- cabeceiros
+-- Agora representa a PARTICIPAÇÃO de um competidor (do banco) numa prova — não guarda
+-- mais nome/HC "de verdade" (isso vive em banco_cabeceiros). `nome`/`hc` aqui ficam
+-- como colunas obsoletas (nunca mais lidas, só preenchidas por compatibilidade com o
+-- NOT NULL já existente) — o valor de verdade sempre vem de um JOIN com banco_cabeceiros.
+-- =========================================================
+CREATE TABLE IF NOT EXISTS cabeceiros (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome                TEXT NOT NULL,
+    hc                  REAL NOT NULL,
+    id_prova            INTEGER NOT NULL,
+
+    -- Quem esse cabeceiro "é" de verdade, no banco global. Nome/HC sempre vêm daqui.
+    id_banco_cabeceiro  INTEGER,
+
+    -- Qual bateria esse cabeceiro pertence (relevante quando a prova tem provas.bateria = 1).
+    -- Validado na aplicação: deve estar entre 1 e provas.bateria_nu. NULL = ainda não organizado.
+    numero_bateria      INTEGER,
+
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at          TEXT NOT NULL DEFAULT (datetime('now')),
+
+    FOREIGN KEY (id_prova) REFERENCES provas(id) ON DELETE CASCADE,
+    -- Sem CASCADE aqui de propósito: excluir alguém do banco enquanto ele ainda está
+    -- registrado em alguma prova deve ser bloqueado, não apagar tudo em cascata.
+    FOREIGN KEY (id_banco_cabeceiro) REFERENCES banco_cabeceiros(id),
+
+    -- O mesmo competidor do banco não pode ser cadastrado 2x na mesma prova
+    UNIQUE (id_prova, id_banco_cabeceiro)
 );
 
 CREATE INDEX IF NOT EXISTS idx_cabeceiros_id_prova ON cabeceiros(id_prova);
+CREATE INDEX IF NOT EXISTS idx_cabeceiros_numero_bateria ON cabeceiros(numero_bateria);
+CREATE INDEX IF NOT EXISTS idx_cabeceiros_id_banco_cabeceiro ON cabeceiros(id_banco_cabeceiro);
 
 -- =========================================================
 -- pezeiros
+-- Mesma lógica de cabeceiros — vira participação, nome/HC vêm de banco_pezeiros.
 -- =========================================================
 CREATE TABLE IF NOT EXISTS pezeiros (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome        TEXT NOT NULL,
-    hc          REAL NOT NULL,
-    id_prova    INTEGER NOT NULL,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome              TEXT NOT NULL,
+    hc                REAL NOT NULL,
+    id_prova          INTEGER NOT NULL,
 
-    FOREIGN KEY (id_prova) REFERENCES provas(id) ON DELETE CASCADE
+    id_banco_pezeiro  INTEGER,
+
+    -- Mesma lógica de cabeceiros.numero_bateria.
+    numero_bateria    INTEGER,
+
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now')),
+
+    FOREIGN KEY (id_prova) REFERENCES provas(id) ON DELETE CASCADE,
+    -- Sem CASCADE aqui de propósito, mesma razão de cabeceiros.
+    FOREIGN KEY (id_banco_pezeiro) REFERENCES banco_pezeiros(id),
+
+    UNIQUE (id_prova, id_banco_pezeiro)
 );
 
 CREATE INDEX IF NOT EXISTS idx_pezeiros_id_prova ON pezeiros(id_prova);
+CREATE INDEX IF NOT EXISTS idx_pezeiros_numero_bateria ON pezeiros(numero_bateria);
+CREATE INDEX IF NOT EXISTS idx_pezeiros_id_banco_pezeiro ON pezeiros(id_banco_pezeiro);
+
+-- =========================================================
+-- cabeceiro_baterias / pezeiro_baterias
+-- Relacionamento N:N — um competidor agora pode pertencer a várias baterias.
+-- Substitui o uso de cabeceiros.numero_bateria / pezeiros.numero_bateria, que ficam
+-- na tabela só por compatibilidade com bancos antigos (não são mais escritos).
+-- =========================================================
+CREATE TABLE IF NOT EXISTS cabeceiro_baterias (
+    id_cabeceiro    INTEGER NOT NULL,
+    numero_bateria  INTEGER NOT NULL,
+
+    PRIMARY KEY (id_cabeceiro, numero_bateria),
+    FOREIGN KEY (id_cabeceiro) REFERENCES cabeceiros(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_cabeceiro_baterias_cabeceiro ON cabeceiro_baterias(id_cabeceiro);
+
+CREATE TABLE IF NOT EXISTS pezeiro_baterias (
+    id_pezeiro      INTEGER NOT NULL,
+    numero_bateria  INTEGER NOT NULL,
+
+    PRIMARY KEY (id_pezeiro, numero_bateria),
+    FOREIGN KEY (id_pezeiro) REFERENCES pezeiros(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_pezeiro_baterias_pezeiro ON pezeiro_baterias(id_pezeiro);
 
 -- =========================================================
 -- duplas
@@ -85,6 +175,15 @@ CREATE TABLE IF NOT EXISTS duplas (
 
     ganhador        INTEGER NOT NULL DEFAULT 0   -- boolean, sem regra de unicidade por enquanto
                         CHECK (ganhador IN (0, 1)),
+
+    -- Marca se a dupla foi formada pelo botão "Sortear Duplas" (true) ou manualmente (false).
+    sorteada        INTEGER NOT NULL DEFAULT 0
+                        CHECK (sorteada IN (0, 1)),
+
+    -- Marca se a dupla foi eliminada (errou um boi). Excluída do ranking/líder/exportações
+    -- de resultado, mas continua na tabela — os tempos que já tinham sido lançados permanecem.
+    eliminada       INTEGER NOT NULL DEFAULT 0
+                        CHECK (eliminada IN (0, 1)),
 
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now')),

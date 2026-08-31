@@ -30,11 +30,9 @@ export default function ProvasPage() {
     }
   }
 
-  async function handleAdd({ nome, data, categoria }: NovaProva) {
+  async function handleAdd({ nome, data, categoria, bateria, bateriaNu, limiteInscricao }: NovaProva) {
     try {
-      // O formulário só pede nome, data e categoria — baterias ainda não têm UI própria,
-      // então por enquanto toda prova criada aqui nasce sem bateria.
-      const novaProva = await criarProva({ nome, data, bateria: false, bateriaNu: null, categoria });
+      const novaProva = await criarProva({ nome, data, categoria, bateria, bateriaNu, limiteInscricao });
       setProvas((prev) => [novaProva, ...prev]);
     } catch (e) {
       setErro(typeof e === "string" ? e : "Não foi possível criar a prova.");

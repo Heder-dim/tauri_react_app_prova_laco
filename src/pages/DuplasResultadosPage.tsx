@@ -1,18 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Download, Shuffle } from "lucide-react";
+import { Download, FileSpreadsheet, Shuffle } from "lucide-react";
 import PageHeader from "../components/layout/page-header";
 import DuplasResultadosTable, {
   type DuplaResultadoRow,
 } from "../components/duplas-resultados/duplas-resultados-table";
 import LiderProvaCard from "../components/duplas-resultados/lider-prova-card";
+import ExportarPdfModal from "../components/duplas-resultados/exportar-pdf-modal";
+import ConfirmDialog from "../components/ui/confirm-dialog";
 // import RegraBoisPanelEditavel from "../components/duplas-resultados/regra-bois-panel";
 import { sortearInscricoes } from "../lib/sorteio";
-import { calcularMenorMedia, calcularParaGanhar } from "../lib/para-ganhar";
+import { calcularMenorMedia, calcularParaGanhar, calcularSomaTempos, MEDIA_INCOMPLETA } from "../lib/para-ganhar";
+import { exportarDuplasResultadosPdf } from "../lib/exportar-pdf";
+import { exportarDuplasResultadosXlsx } from "../lib/exportar-xlsx";
+import { type ProvaDb, buscarProva } from "../services/provas";
 import {
   atualizarDupla,
   atualizarInscricao,
   boisParaTempos,
+  deletarDupla,
   listarDuplasPorProva,
   temposParaBois,
   type DuplaDetalhadaDb,
@@ -37,6 +43,7 @@ function paraLinhaDupla(d: DuplaDetalhadaDb, numero: number): DuplaComId {
     id: d.id,
     numero,
     inscricao: d.inscricao ?? 0,
+    numeroBateria: d.numero_bateria,
     idCabeceiro: d.id_cabeceiro,
     idPezeiro: d.id_pezeiro,
     cabeceiroNome: d.cabeceiro_nome,
@@ -46,10 +53,12 @@ function paraLinhaDupla(d: DuplaDetalhadaDb, numero: number): DuplaComId {
     hcPez: d.hc_pezeiro,
     hcDupla: d.hc_soma ?? d.hc_cabeceiro + d.hc_pezeiro,
     bois: d.bois_nu,
+    sorteada: d.sorteada,
+    eliminada: d.eliminada,
     tempos: boisParaTempos(d),
-    parcial: d.parcial ?? 0,
-    boiFinal: d.boi_final ?? 0,
-    media: d.media ?? 0,
+    parcial: d.parcial,
+    boiFinal: d.boi_final,
+    media: d.media ?? MEDIA_INCOMPLETA,
     paraGanhar: d.para_ganhar ?? 0,
   };
 }
@@ -59,28 +68,43 @@ export default function DuplasResultadosPage() {
   const idProvaNum = Number(idProva);
 
   const [duplas, setDuplas] = useState<DuplaComId[]>([]);
+  const [prova, setProva] = useState<ProvaDb | null>(null);
+  const [filtroBateria, setFiltroBateria] = useState<number | null>(null); // null = todas as baterias
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [intervaloTexto, setIntervaloTexto] = useState("3");
   const [sorteandoInscricao, setSorteandoInscricao] = useState(false);
+  const [duplaParaExcluir, setDuplaParaExcluir] = useState<DuplaComId | null>(null);
+  const [pdfModalAberto, setPdfModalAberto] = useState(false);
 
   useEffect(() => {
     carregarDuplas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idProvaNum]);
 
-  /** "Para Ganhar" recalculado ao vivo — muda sempre que a média de qualquer dupla muda */
+  /** "Para Ganhar" recalculado ao vivo — muda sempre que a média de qualquer dupla muda.
+   * Sempre calculado sobre TODAS as duplas da prova, mesmo com filtro de bateria ativo.
+   * Usa a SOMA bruta dos tempos (não o campo "Parcial", que agora é uma média e só existe
+   * quando a dupla está completa) — é assim que a fórmula original sempre funcionou. */
   const duplasComParaGanhar = useMemo(() => {
     const menorMedia = calcularMenorMedia(duplas);
     return duplas.map((d) => ({
       ...d,
-      paraGanhar: calcularParaGanhar(d.bois, d.parcial, menorMedia),
+      paraGanhar: calcularParaGanhar(d.bois, calcularSomaTempos(d.tempos, d.bois), menorMedia),
     }));
   }, [duplas]);
 
-  /** Dupla líder da prova no momento — quem tem a menor média entre quem já tem resultado */
+  /** O que a tabela realmente exibe — filtrado pela bateria selecionada, se houver */
+  const duplasExibidas = useMemo(() => {
+    if (filtroBateria === null) return duplasComParaGanhar;
+    return duplasComParaGanhar.filter((d) => d.numeroBateria === filtroBateria);
+  }, [duplasComParaGanhar, filtroBateria]);
+
+  /** Dupla líder da prova no momento — quem tem a menor média entre quem já tem resultado
+   * válido (não incompleta, não eliminada). Sempre considera a prova inteira, mesmo com
+   * filtro de bateria ativo. */
   const lider = useMemo(() => {
-    const candidatas = duplas.filter((d) => d.media > 0);
+    const candidatas = duplas.filter((d) => !d.eliminada && d.media !== MEDIA_INCOMPLETA);
     if (candidatas.length === 0) return null;
     return candidatas.reduce((melhor, atual) => (atual.media < melhor.media ? atual : melhor));
   }, [duplas]);
@@ -89,9 +113,13 @@ export default function DuplasResultadosPage() {
     setCarregando(true);
     setErro(null);
     try {
-      const dados = await listarDuplasPorProva(idProvaNum);
+      const [dados, prova] = await Promise.all([
+        listarDuplasPorProva(idProvaNum),
+        buscarProva(idProvaNum),
+      ]);
       const ordenados = [...dados].sort((a, b) => (a.inscricao ?? 0) - (b.inscricao ?? 0));
       setDuplas(ordenados.map((d, i) => paraLinhaDupla(d, i + 1)));
+      setProva(prova);
     } catch (e) {
       setErro(typeof e === "string" ? e : "Não foi possível carregar as duplas.");
     } finally {
@@ -102,6 +130,11 @@ export default function DuplasResultadosPage() {
   /**
    * Sorteia uma nova ordem de inscrição pra todas as duplas já formadas, tentando
    * respeitar o intervalo mínimo entre corridas do mesmo cabeceiro/pezeiro.
+   *
+   * Quando a prova usa baterias, cada bateria vira um bloco contínuo de inscrições
+   * (bateria 1 = 1..N1, bateria 2 = N1+1..N1+N2, ...) — o sorteio roda separadamente
+   * dentro de cada bateria, e só depois os blocos são concatenados na ordem numérica.
+   * Duplas sem bateria definida (numeroBateria null) formam um bloco à parte, por último.
    */
   async function handleSortearInscricao() {
     const intervalo = Number(intervaloTexto);
@@ -114,10 +147,42 @@ export default function DuplasResultadosPage() {
     setSorteandoInscricao(true);
     setErro(null);
     try {
-      const novaOrdem = sortearInscricoes(
-        duplas.map((d) => ({ id: d.id, idCabeceiro: d.idCabeceiro, idPezeiro: d.idPezeiro })),
-        intervalo
-      );
+      const usaBaterias = prova?.bateria === true;
+      let novaOrdem = new Map<number, number>();
+
+      if (usaBaterias) {
+        const gruposPorBateria = new Map<number | null, DuplaComId[]>();
+        for (const d of duplas) {
+          const grupo = gruposPorBateria.get(d.numeroBateria) ?? [];
+          grupo.push(d);
+          gruposPorBateria.set(d.numeroBateria, grupo);
+        }
+
+        // Ordena as baterias numericamente; quem não tem bateria definida vai por último
+        const chavesOrdenadas = [...gruposPorBateria.keys()].sort((a, b) => {
+          if (a === null) return 1;
+          if (b === null) return -1;
+          return a - b;
+        });
+
+        let offset = 0;
+        for (const chave of chavesOrdenadas) {
+          const grupo = gruposPorBateria.get(chave)!;
+          const ordemDoGrupo = sortearInscricoes(
+            grupo.map((d) => ({ id: d.id, idCabeceiro: d.idCabeceiro, idPezeiro: d.idPezeiro })),
+            intervalo
+          );
+          for (const [id, posicao] of ordemDoGrupo) {
+            novaOrdem.set(id, posicao + offset);
+          }
+          offset += grupo.length;
+        }
+      } else {
+        novaOrdem = sortearInscricoes(
+          duplas.map((d) => ({ id: d.id, idCabeceiro: d.idCabeceiro, idPezeiro: d.idPezeiro })),
+          intervalo
+        );
+      }
 
       // Persiste cada inscrição nova no banco
       await Promise.all(
@@ -143,49 +208,206 @@ export default function DuplasResultadosPage() {
   }
 
   /**
+   * Move uma dupla para uma nova inscrição.
+   * Se a inscrição já existir, as demais são deslocadas (+1).
+   *
+   * Exemplo:
+   * 1 -> 200
+   * 200 vira 201, 201 vira 202, etc.
+   */
+  async function handleInscricaoChange(duplaIndex: number, novaInscricao: number) {
+    // `duplaIndex` vem da tabela, que pode estar mostrando só um subconjunto filtrado por
+    // bateria — por isso busca em `duplasExibidas` (o que a tabela realmente tem), não em `duplas`.
+    const duplaMovida = duplasExibidas[duplaIndex];
+    if (!duplaMovida) return;
+
+    const inscricaoAntiga = duplaMovida.inscricao;
+    if (inscricaoAntiga === novaInscricao) return;
+
+    // Clona a lista atual
+    let atualizadas = [...duplas];
+
+    if (novaInscricao > inscricaoAntiga) {
+      // Move para frente: 1 -> 200
+      // Desloca [200..fim] +1
+      atualizadas = atualizadas.map((d) => {
+        if (d.id === duplaMovida.id) return d;
+
+        if (d.inscricao >= novaInscricao) {
+          return { ...d, inscricao: d.inscricao + 1 };
+        }
+
+        return d;
+      });
+    } else {
+      // Move para trás: 200 -> 1
+      // Desloca [1..199] +1 pra abrir espaço na posição 1 (e liberar a antiga posição 200)
+      atualizadas = atualizadas.map((d) => {
+        if (d.id === duplaMovida.id) return d;
+
+        if (d.inscricao >= novaInscricao && d.inscricao < inscricaoAntiga) {
+          return { ...d, inscricao: d.inscricao + 1 };
+        }
+
+        return d;
+      });
+    }
+
+    // Aplica a nova inscrição na dupla movida
+    atualizadas = atualizadas.map((d) =>
+      d.id === duplaMovida.id ? { ...d, inscricao: novaInscricao } : d
+    );
+
+    // Reordena e renumera
+    atualizadas = atualizadas
+      .sort((a, b) => a.inscricao - b.inscricao)
+      .map((d, i) => ({ ...d, numero: i + 1 }));
+
+    // Atualiza UI imediatamente
+    setDuplas(atualizadas);
+
+    try {
+      /**
+       * Evita conflito de UNIQUE:
+       * primeiro move tudo para um intervalo temporário alto,
+       * depois grava os valores finais.
+       */
+      await Promise.all(
+        atualizadas.map((d) => atualizarInscricao(d.id, d.inscricao + 10000))
+      );
+
+      await Promise.all(
+        atualizadas.map((d) => atualizarInscricao(d.id, d.inscricao))
+      );
+    } catch (e) {
+      setErro(
+        typeof e === "string"
+          ? e
+          : "Não foi possível atualizar as inscrições."
+      );
+
+      // Recarrega do banco em caso de erro
+      await carregarDuplas();
+    }
+  }
+
+  /**
    * Chamado pela DuplasResultadosTable sempre que um tempo ou o Boi Final é editado.
-   * Compara com o estado anterior pra persistir só as linhas que de fato mudaram.
+   * Casa por `id` (não por posição) porque a tabela pode estar recebendo só um
+   * subconjunto filtrado por bateria — a posição na tabela não corresponde à posição
+   * no estado completo da página.
    */
   function handleDuplasChange(atualizado: DuplaResultadoRow[]) {
-    // A tabela só espalha (`{...dupla, ...}`) os objetos originais — o campo extra `id`
-    // sobrevive em tempo de execução mesmo não fazendo parte do tipo DuplaResultadoRow.
     const comId = atualizado as DuplaComId[];
-    const anterior = duplas;
-    setDuplas(comId);
 
-    comId.forEach((dupla, i) => {
-      const original = anterior[i];
-      if (!original) return;
+    setDuplas((prev) => {
+      const porId = new Map(comId.map((d) => [d.id, d]));
 
-      const mudou =
-        original.boiFinal !== dupla.boiFinal ||
-        original.parcial !== dupla.parcial ||
-        original.media !== dupla.media ||
-        original.tempos.some((t, idx) => t !== dupla.tempos[idx]);
-
-      if (!mudou) return;
-
-      // Recalcula o Para Ganhar com a média mais atual (incluindo a mudança que acabou de acontecer)
-      const menorMediaAtual = calcularMenorMedia(comId);
-      const paraGanharAtualizado = calcularParaGanhar(dupla.bois, dupla.parcial, menorMediaAtual);
-
-      const { boi1, boi2, boi3, boi4, boi5, boi6 } = temposParaBois(dupla.tempos);
-      atualizarDupla({
-        id: dupla.id,
-        boi1,
-        boi2,
-        boi3,
-        boi4,
-        boi5,
-        boi6,
-        parcial: dupla.parcial,
-        boiFinal: dupla.boiFinal,
-        media: dupla.media,
-        paraGanhar: paraGanharAtualizado,
-      }).catch((e) => {
-        setErro(typeof e === "string" ? e : "Não foi possível salvar a alteração.");
+      const novoEstado = prev.map((dupla) => {
+        const novo = porId.get(dupla.id);
+        if (!novo) return dupla;
+        return {
+          ...dupla,
+          tempos: novo.tempos,
+          boiFinal: novo.boiFinal,
+          parcial: novo.parcial,
+          media: novo.media,
+          eliminada: novo.eliminada,
+        };
       });
+
+      for (const dupla of novoEstado) {
+        const original = prev.find((d) => d.id === dupla.id);
+        if (!original) continue;
+
+        const mudou =
+          original.boiFinal !== dupla.boiFinal ||
+          original.parcial !== dupla.parcial ||
+          original.media !== dupla.media ||
+          original.eliminada !== dupla.eliminada ||
+          original.tempos.some((t, idx) => t !== dupla.tempos[idx]);
+
+        if (!mudou) continue;
+
+        // Recalcula o Para Ganhar com a média mais atual (incluindo a mudança que acabou de acontecer)
+        const menorMediaAtual = calcularMenorMedia(novoEstado);
+        const paraGanharAtualizado = calcularParaGanhar(
+          dupla.bois,
+          calcularSomaTempos(dupla.tempos, dupla.bois),
+          menorMediaAtual
+        );
+
+        const { boi1, boi2, boi3, boi4, boi5, boi6 } = temposParaBois(dupla.tempos);
+        atualizarDupla({
+          id: dupla.id,
+          boi1,
+          boi2,
+          boi3,
+          boi4,
+          boi5,
+          boi6,
+          parcial: dupla.parcial,
+          boiFinal: dupla.boiFinal,
+          media: dupla.media,
+          paraGanhar: paraGanharAtualizado,
+          eliminada: dupla.eliminada,
+        }).catch((e) => {
+          setErro(typeof e === "string" ? e : "Não foi possível salvar a alteração.");
+        });
+      }
+
+      return novoEstado;
     });
+  }
+
+  function handleSolicitarExclusao(duplaIndex: number) {
+    // Mesma lógica de handleInscricaoChange: o índice vem da tabela, que pode estar
+    // mostrando só um subconjunto filtrado por bateria.
+    const dupla = duplasExibidas[duplaIndex];
+    if (!dupla) return;
+    setDuplaParaExcluir(dupla);
+  }
+
+  async function handleConfirmarExclusao() {
+    if (!duplaParaExcluir) return;
+
+    try {
+      await deletarDupla(duplaParaExcluir.id);
+      setDuplas((prev) => prev.filter((d) => d.id !== duplaParaExcluir.id));
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível excluir a dupla.");
+    } finally {
+      setDuplaParaExcluir(null);
+    }
+  }
+
+  async function handleExportarPdfTodas() {
+    setPdfModalAberto(false);
+    try {
+      await exportarDuplasResultadosPdf(duplasExibidas, prova?.nome);
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível exportar o PDF.");
+    }
+  }
+
+  async function handleExportarPdfComTempo() {
+    setPdfModalAberto(false);
+    try {
+      const comTempo = duplasExibidas
+        .filter((d) => d.tempos.some((t) => t !== null))
+        .sort((a, b) => a.media - b.media);
+      await exportarDuplasResultadosPdf(comTempo, prova?.nome);
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível exportar o PDF.");
+    }
+  }
+
+  async function handleExportarXlsx() {
+    try {
+      await exportarDuplasResultadosXlsx(duplasExibidas, prova?.nome);
+    } catch (e) {
+      setErro(typeof e === "string" ? e : "Não foi possível exportar o XLSX.");
+    }
   }
 
   return (
@@ -194,10 +416,22 @@ export default function DuplasResultadosPage() {
         title="Duplas e Resultados"
         subtitle="Todas as duplas registradas, de todos os cabeceiros"
         action={
-          <button className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700">
-            <Download size={16} />
-            Exportar PDF
-          </button>
+          <div className="flex gap-2.5">
+            <button
+              onClick={handleExportarXlsx}
+              className="flex items-center gap-2 rounded-xl border border-blue-500 bg-white px-4 py-2.5 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+            >
+              <FileSpreadsheet size={16} />
+              Exportar XLSX
+            </button>
+            <button
+              onClick={() => setPdfModalAberto(true)}
+              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700"
+            >
+              <Download size={16} />
+              Exportar PDF
+            </button>
+          </div>
         }
       />
 
@@ -218,44 +452,103 @@ export default function DuplasResultadosPage() {
           </div>
         ) : (
           <>
-            <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-white p-4 shadow-sm">
-              <div>
-                <label htmlFor="intervalo" className="mb-1.5 block text-xs text-slate-500">
-                  Intervalo mínimo entre corridas
-                </label>
-                <input
-                  id="intervalo"
-                  type="text"
-                  inputMode="numeric"
-                  value={intervaloTexto}
-                  onChange={(e) => setIntervaloTexto(e.target.value)}
-                  placeholder="Ex: 3"
-                  className="w-24 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                />
+            {prova?.bateria && prova.bateria_nu && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                  Bateria
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFiltroBateria(null)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                    filtroBateria === null
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-slate-500 shadow-sm hover:bg-slate-50"
+                  }`}
+                >
+                  Todas
+                </button>
+                {Array.from({ length: prova.bateria_nu }, (_, i) => i + 1).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setFiltroBateria(n)}
+                    className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                      filtroBateria === n
+                        ? "bg-blue-600 text-white"
+                        : "bg-white text-slate-500 shadow-sm hover:bg-slate-50"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
               </div>
-              <button
-                type="button"
-                onClick={handleSortearInscricao}
-                disabled={sorteandoInscricao || !intervaloTexto.trim()}
-                className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
-              >
-                <Shuffle size={16} />
-                {sorteandoInscricao ? "Sorteando..." : "Sortear Inscrição"}
-              </button>
-              <p className="text-xs text-slate-400">
-                Reembaralha a ordem de inscrição de todas as duplas, respeitando o intervalo
-                sempre que possível.
-              </p>
-            </div>
+            )}
 
             <div className="flex flex-col gap-5 lg:flex-row">
-              <DuplasResultadosTable duplas={duplasComParaGanhar} onDuplasChange={handleDuplasChange} />
+              <div className="flex flex-1 flex-wrap items-end gap-3 rounded-2xl bg-white p-4 shadow-sm">
+                <div>
+                  <label htmlFor="intervalo" className="mb-1.5 block text-xs text-slate-500">
+                    Intervalo mínimo entre corridas
+                  </label>
+                  <input
+                    id="intervalo"
+                    type="text"
+                    inputMode="numeric"
+                    value={intervaloTexto}
+                    onChange={(e) => setIntervaloTexto(e.target.value)}
+                    placeholder="Ex: 3"
+                    className="w-24 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSortearInscricao}
+                  disabled={sorteandoInscricao || !intervaloTexto.trim()}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+                >
+                  <Shuffle size={16} />
+                  {sorteandoInscricao ? "Sorteando..." : "Sortear Inscrição"}
+                </button>
+                <p className="text-xs text-slate-400">
+                  {prova?.bateria
+                    ? "Reembaralha a ordem de inscrição de cada bateria separadamente (cada uma vira um bloco contínuo), respeitando o intervalo sempre que possível."
+                    : "Reembaralha a ordem de inscrição de todas as duplas, respeitando o intervalo sempre que possível."}
+                </p>
+              </div>
+
               <LiderProvaCard lider={lider} />
-              {/* <RegraBoisPanelEditavel /> */}
             </div>
+
+            <DuplasResultadosTable
+              duplas={duplasExibidas}
+              onDuplasChange={handleDuplasChange}
+              onInscricaoChange={handleInscricaoChange}
+              onDeletar={handleSolicitarExclusao}
+            />
           </>
         )}
       </div>
+
+      <ExportarPdfModal
+        open={pdfModalAberto}
+        onExportarTodas={handleExportarPdfTodas}
+        onExportarComTempo={handleExportarPdfComTempo}
+        onClose={() => setPdfModalAberto(false)}
+      />
+
+      <ConfirmDialog
+        open={duplaParaExcluir !== null}
+        title={
+          duplaParaExcluir
+            ? `Excluir dupla "${duplaParaExcluir.cabeceiroNome} & ${duplaParaExcluir.pezeiroNome}"?`
+            : ""
+        }
+        description="Essa ação não pode ser desfeita. Os tempos e resultados dessa dupla serão perdidos."
+        confirmLabel="Excluir"
+        onConfirm={handleConfirmarExclusao}
+        onCancel={() => setDuplaParaExcluir(null)}
+      />
     </div>
   );
 }

@@ -1,8 +1,58 @@
 use crate::db::DbConnection;
 use crate::models::Cabeceiro;
 use rusqlite::params;
+use std::collections::HashMap;
 use tauri::State;
 
+/// Coloca um cabeceiro do banco global (já existente) numa bateria 1 por padrão, se a
+/// prova usa baterias. Reaproveitado tanto por "adicionar do banco" quanto "cadastro rápido".
+fn inserir_participacao(
+    conn: &rusqlite::Connection,
+    id_banco_cabeceiro: i64,
+    id_prova: i64,
+    nome: &str,
+    hc: f64,
+) -> Result<(i64, Vec<i64>), String> {
+    let usa_bateria: i64 = conn
+        .query_row(
+            "SELECT bateria FROM provas WHERE id = ?1",
+            params![id_prova],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    // `nome`/`hc` aqui são só pra satisfazer a coluna NOT NULL antiga da tabela — nunca
+    // mais são lidos de volta (sempre vem do JOIN com banco_cabeceiros).
+    conn.execute(
+        "INSERT INTO cabeceiros (nome, hc, id_prova, id_banco_cabeceiro) VALUES (?1, ?2, ?3, ?4)",
+        params![nome, hc, id_prova, id_banco_cabeceiro],
+    )
+    .map_err(|e| {
+        if e.to_string().contains("UNIQUE") {
+            "Esse cabeceiro já está cadastrado nessa prova.".to_string()
+        } else {
+            e.to_string()
+        }
+    })?;
+
+    let id = conn.last_insert_rowid();
+
+    let baterias: Vec<i64> = if usa_bateria != 0 {
+        conn.execute(
+            "INSERT INTO cabeceiro_baterias (id_cabeceiro, numero_bateria) VALUES (?1, 1)",
+            params![id],
+        )
+        .map_err(|e| e.to_string())?;
+        vec![1]
+    } else {
+        vec![]
+    };
+
+    Ok((id, baterias))
+}
+
+/// "Cadastro rápido": cria um cabeceiro novo direto no banco global E já registra ele
+/// nessa prova, num passo só. Usado quando a pessoa ainda não existe no banco.
 #[tauri::command]
 pub fn criar_cabeceiro(
     nome: String,
@@ -17,17 +67,55 @@ pub fn criar_cabeceiro(
     let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     conn.execute(
-        "INSERT INTO cabeceiros (nome, hc, id_prova) VALUES (?1, ?2, ?3)",
-        params![nome, hc, id_prova],
+        "INSERT INTO banco_cabeceiros (nome, hc) VALUES (?1, ?2)",
+        params![nome, hc],
     )
     .map_err(|e| e.to_string())?;
+    let id_banco_cabeceiro = conn.last_insert_rowid();
 
-    let id = conn.last_insert_rowid();
+    let (id, baterias) = inserir_participacao(&conn, id_banco_cabeceiro, id_prova, &nome, hc)?;
 
-    Ok(Cabeceiro { id, nome, hc, id_prova })
+    Ok(Cabeceiro {
+        id,
+        nome,
+        hc,
+        id_prova,
+        id_banco_cabeceiro,
+        baterias,
+    })
 }
 
-/// Lista os cabeceiros de uma prova específica — é isso que implementa o "filtro por id da prova".
+/// Registra nessa prova um cabeceiro que JÁ EXISTE no banco global (selecionado pelo usuário).
+#[tauri::command]
+pub fn adicionar_cabeceiro_a_prova(
+    id_banco_cabeceiro: i64,
+    id_prova: i64,
+    db: State<DbConnection>,
+) -> Result<Cabeceiro, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+
+    let (nome, hc): (String, f64) = conn
+        .query_row(
+            "SELECT nome, hc FROM banco_cabeceiros WHERE id = ?1",
+            params![id_banco_cabeceiro],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let (id, baterias) = inserir_participacao(&conn, id_banco_cabeceiro, id_prova, &nome, hc)?;
+
+    Ok(Cabeceiro {
+        id,
+        nome,
+        hc,
+        id_prova,
+        id_banco_cabeceiro,
+        baterias,
+    })
+}
+
+/// Lista os cabeceiros de uma prova específica — nome/HC sempre vêm do banco global (JOIN),
+/// já com as baterias de cada um.
 #[tauri::command]
 pub fn listar_cabeceiros_por_prova(
     id_prova: i64,
@@ -36,25 +124,103 @@ pub fn listar_cabeceiros_por_prova(
     let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     let mut stmt = conn
-        .prepare("SELECT id, nome, hc, id_prova FROM cabeceiros WHERE id_prova = ?1 ORDER BY nome")
+        .prepare(
+            "SELECT c.id, bc.nome, bc.hc, c.id_prova, c.id_banco_cabeceiro
+             FROM cabeceiros c
+             JOIN banco_cabeceiros bc ON bc.id = c.id_banco_cabeceiro
+             WHERE c.id_prova = ?1
+             ORDER BY bc.nome",
+        )
         .map_err(|e| e.to_string())?;
 
-    let cabeceiros = stmt
+    let mut cabeceiros = stmt
         .query_map(params![id_prova], |row| {
             Ok(Cabeceiro {
                 id: row.get(0)?,
                 nome: row.get(1)?,
                 hc: row.get(2)?,
                 id_prova: row.get(3)?,
+                id_banco_cabeceiro: row.get(4)?,
+                baterias: Vec::new(),
             })
         })
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
 
+    // Busca todas as baterias de uma vez (evita N+1 query) e agrupa por id_cabeceiro.
+    let mut stmt_baterias = conn
+        .prepare(
+            "SELECT cb.id_cabeceiro, cb.numero_bateria
+             FROM cabeceiro_baterias cb
+             JOIN cabeceiros c ON c.id = cb.id_cabeceiro
+             WHERE c.id_prova = ?1
+             ORDER BY cb.numero_bateria",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut baterias_por_cabeceiro: HashMap<i64, Vec<i64>> = HashMap::new();
+    let linhas = stmt_baterias
+        .query_map(params![id_prova], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+        })
+        .map_err(|e| e.to_string())?;
+
+    for linha in linhas {
+        let (id_cabeceiro, numero_bateria) = linha.map_err(|e| e.to_string())?;
+        baterias_por_cabeceiro
+            .entry(id_cabeceiro)
+            .or_default()
+            .push(numero_bateria);
+    }
+
+    for cabeceiro in &mut cabeceiros {
+        if let Some(baterias) = baterias_por_cabeceiro.remove(&cabeceiro.id) {
+            cabeceiro.baterias = baterias;
+        }
+    }
+
     Ok(cabeceiros)
 }
 
+/// Substitui o conjunto de baterias de um cabeceiro pelo informado (apaga as antigas e insere as novas).
+#[tauri::command]
+pub fn atualizar_baterias_cabeceiro(
+    id: i64,
+    baterias: Vec<i64>,
+    db: State<DbConnection>,
+) -> Result<(), String> {
+    let mut conn = db.0.lock().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    tx.execute(
+        "DELETE FROM cabeceiro_baterias WHERE id_cabeceiro = ?1",
+        params![id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    for numero_bateria in &baterias {
+        tx.execute(
+            "INSERT INTO cabeceiro_baterias (id_cabeceiro, numero_bateria) VALUES (?1, ?2)",
+            params![id, numero_bateria],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    tx.execute(
+        "UPDATE cabeceiros SET updated_at = datetime('now') WHERE id = ?1",
+        params![id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    tx.commit().map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// Remove o cabeceiro DESSA prova (apaga só a participação — o registro dele no banco
+/// global continua existindo, disponível pra outras provas). Nome mantido como
+/// "deletar_cabeceiro" por compatibilidade com o que já estava registrado.
 #[tauri::command]
 pub fn deletar_cabeceiro(id: i64, db: State<DbConnection>) -> Result<(), String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;

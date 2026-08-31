@@ -9,6 +9,7 @@ export interface ProvaDb {
   bateria: boolean;
   bateria_nu: number | null;
   categoria: CategoriaProva;
+  limite_inscricao: number | null;
 }
 
 export interface NovaProvaDb {
@@ -17,6 +18,7 @@ export interface NovaProvaDb {
   bateria: boolean;
   bateriaNu?: number | null;
   categoria: CategoriaProva;
+  limiteInscricao?: number | null;
 }
 
 /**
@@ -31,6 +33,7 @@ export function criarProva(nova: NovaProvaDb): Promise<ProvaDb> {
     bateria: nova.bateria,
     bateriaNu: nova.bateriaNu ?? null,
     categoria: nova.categoria,
+    limiteInscricao: nova.limiteInscricao ?? null,
   });
 }
 

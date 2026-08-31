@@ -8,4 +8,6 @@ pub struct Prova {
     pub bateria: bool,
     pub bateria_nu: Option<i64>,
     pub categoria: String, // "Aberta" ou "Soma"
+    /// Limite de inscrições por competidor nessa prova. None = sem limite.
+    pub limite_inscricao: Option<i64>,
 }

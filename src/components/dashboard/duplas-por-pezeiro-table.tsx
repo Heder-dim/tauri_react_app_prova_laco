@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, Ban, Dices, Trash2 } from "lucide-react";
 import Avatar from "../ui/avatar";
 import LiveBadge from "../ui/live-badge";
+import ConfirmDialog from "../ui/confirm-dialog";
+import { MEDIA_INCOMPLETA } from "../../lib/para-ganhar";
 
 export interface DuplaPorPezeiroRow {
   numero: number;
@@ -10,13 +13,19 @@ export interface DuplaPorPezeiroRow {
   hcCabeceiro: number;
   hcDupla: number;
   bois: number;
+  /** true se a dupla foi formada pelo botão "Sortear Duplas"; false se foi manual */
+  sorteada: boolean;
+  /** true se a dupla foi eliminada (errou um boi) — digitar "sat" ou "erro" num tempo marca automaticamente */
+  eliminada: boolean;
   /** Tempos do 1º ao 6º boi, em segundos. `null` = ainda não corrido. */
   tempos: (number | null)[];
-  /** Calculado automaticamente a partir de `tempos` (soma) */
-  parcial: number;
-  /** Editável — campo independente, não é mais calculado a partir de `tempos` */
-  boiFinal: number;
-  /** Calculado automaticamente a partir de `tempos` */
+  /** Calculado automaticamente — média dos tempos de boi, só quando TODOS os bois da dupla
+   * já foram lançados; `null` enquanto estiver incompleta (bate com a planilha original). */
+  parcial: number | null;
+  /** Editável — campo independente. `null` = ainda não lançado. */
+  boiFinal: number | null;
+  /** Calculado automaticamente. Vale 120 (valor "castigo" da planilha original) quando a
+   * dupla está incompleta (1º tempo vazio/0, ou Boi Final ainda não lançado). */
   media: number;
   /** Ainda estático — depende da comparação com as outras duplas (regra de ranking não definida) */
   paraGanhar: number;
@@ -29,6 +38,8 @@ export interface DuplasPorPezeiroTableProps {
   aoVivo?: boolean;
   /** Chamado sempre que um tempo ou o Boi Final é editado, já com os valores recalculados */
   onDuplasChange?: (duplas: DuplaPorPezeiroRow[]) => void;
+  /** Chamado quando o usuário confirma a exclusão de uma dupla (o índice na lista atual) */
+  onDeletar?: (duplaIndex: number) => void;
 }
 
 function formatTempo(valor: number | null) {
@@ -44,15 +55,33 @@ function parseTempoInput(raw: string): number | null {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-/** Recalcula Parcial (soma dos tempos 1-5) e Média (tempos 1-5 + Boi Final) */
+/**
+ * Recalcula Parcial e Média, replicando a planilha original:
+ * - Parcial = MÉDIA dos tempos de boi (não soma!), e só existe quando TODOS os bois
+ *   dessa dupla já foram lançados — senão fica `null`.
+ * - Média = 120 (valor "castigo") se o 1º tempo estiver vazio/0, se o Boi Final ainda
+ *   não foi lançado, ou se a dupla estiver eliminada. Senão, é a média dos tempos
+ *   lançados (ignorando os ainda vazios, igual a MÉDIA() do Excel) + o Boi Final.
+ */
 function recalcularParcialEMedia(dupla: DuplaPorPezeiroRow): DuplaPorPezeiroRow {
-  const temposValidos = dupla.tempos.filter((t): t is number => t !== null);
+  const temposRelevantes = dupla.tempos.slice(0, dupla.bois);
+  const todosPreenchidos = temposRelevantes.every((t) => t !== null);
 
-  const parcial = temposValidos.reduce((soma, t) => soma + t, 0);
+  const parcial = todosPreenchidos
+    ? (temposRelevantes as number[]).reduce((soma, t) => soma + t, 0) / dupla.bois
+    : null;
 
-  const valoresParaMedia = [...temposValidos, dupla.boiFinal];
-  const media =
-    valoresParaMedia.reduce((soma, t) => soma + t, 0) / valoresParaMedia.length;
+  const primeiroTempo = dupla.tempos[0];
+  const primeiroTempoValido = primeiroTempo !== null && primeiroTempo !== 0;
+
+  let media: number;
+  if (!primeiroTempoValido || dupla.boiFinal === null || dupla.eliminada) {
+    media = MEDIA_INCOMPLETA;
+  } else {
+    const temposLancados = temposRelevantes.filter((t): t is number => t !== null);
+    const valoresParaMedia = [...temposLancados, dupla.boiFinal];
+    media = valoresParaMedia.reduce((soma, t) => soma + t, 0) / valoresParaMedia.length;
+  }
 
   return { ...dupla, parcial, media };
 }
@@ -63,14 +92,27 @@ export default function DuplasPorPezeiroTable({
   duplas: duplasIniciais,
   aoVivo = true,
   onDuplasChange,
+  onDeletar,
 }: DuplasPorPezeiroTableProps) {
   const [duplas, setDuplas] = useState<DuplaPorPezeiroRow[]>(duplasIniciais);
 
   // Guarda o texto exatamente como foi digitado em cada campo, pra não perder a vírgula/ponto ao reformatar.
   const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
 
-  // Ressincroniza sempre que o array recebido via prop mudar de fato (pezeiro trocado, dupla nova formada).
+  // Conta quantas edições a própria tabela mandou pra página (via onDuplasChange) e ainda não
+  // "voltaram" como prop. Cada onDuplasChange incrementa; cada mudança de prop correspondente
+  // decrementa e pula o resync. Precisa ser um CONTADOR (não um booleano) porque digitar rápido
+  // ("s", "sa", "sat") gera vários ciclos de ida-e-volta em sequência — um booleano só consegue
+  // "lembrar" de ignorar um retorno, fazendo os seguintes resetar o campo no meio da digitação.
+  const ecosPendentesRef = useRef(0);
+
+  // Ressincroniza sempre que o array recebido via prop mudar de fato (pezeiro trocado, dupla nova
+  // formada) — MAS só quando a mudança vem de fora (não é eco da nossa própria digitação).
   useEffect(() => {
+    if (ecosPendentesRef.current > 0) {
+      ecosPendentesRef.current -= 1;
+      return;
+    }
     setDuplas(duplasIniciais);
     setRawInputs({});
   }, [duplasIniciais]);
@@ -82,43 +124,163 @@ export default function DuplasPorPezeiroTable({
       const atualizado = prev.map((dupla, i) => {
         if (i !== duplaIndex) return dupla;
 
+        const textoLimpo = rawValue.trim().toLowerCase();
+        const ehMarcaDeEliminacao = textoLimpo === "sat" || textoLimpo === "erro";
+
         const novosTempos = [...dupla.tempos];
         novosTempos[tempoIndex] = parseTempoInput(rawValue);
 
-        return recalcularParcialEMedia({ ...dupla, tempos: novosTempos });
+        const duplaRecalculada = recalcularParcialEMedia({ ...dupla, tempos: novosTempos });
+        return ehMarcaDeEliminacao ? { ...duplaRecalculada, eliminada: true } : duplaRecalculada;
       });
 
+      ecosPendentesRef.current += 1;
       onDuplasChange?.(atualizado);
       return atualizado;
     });
   }
 
+  /** Desfaz (ou refaz) a marcação de eliminada — botão no badge "ELIMINADA" da linha */
+  function handleToggleEliminada(duplaIndex: number) {
+    setDuplas((prev) => {
+      const atualizado = prev.map((dupla, i) =>
+        i === duplaIndex ? { ...dupla, eliminada: !dupla.eliminada } : dupla
+      );
+      ecosPendentesRef.current += 1;
+      onDuplasChange?.(atualizado);
+      return atualizado;
+    });
+  }
+
+  // O clique no badge "ELIMINADA" pede confirmação antes de desfazer — evita clique acidental
+  // apagando o registro de que a dupla errou o boi.
+  const [duplaParaDesmarcar, setDuplaParaDesmarcar] = useState<number | null>(null);
+
+  function handleSolicitarDesmarcarEliminada(duplaIndex: number) {
+    setDuplaParaDesmarcar(duplaIndex);
+  }
+
+  function handleConfirmarDesmarcarEliminada() {
+    if (duplaParaDesmarcar !== null) handleToggleEliminada(duplaParaDesmarcar);
+    setDuplaParaDesmarcar(null);
+  }
+
+  /** Igual aos tempos normais, "sat"/"erro" aqui também marca a dupla como eliminada. */
   function handleBoiFinalChange(duplaIndex: number, rawValue: string) {
     setRawInputs((prev) => ({ ...prev, [`boiFinal-${duplaIndex}`]: rawValue }));
 
     setDuplas((prev) => {
       const atualizado = prev.map((dupla, i) => {
         if (i !== duplaIndex) return dupla;
-        const novoBoiFinal = parseTempoInput(rawValue) ?? 0;
-        return recalcularParcialEMedia({ ...dupla, boiFinal: novoBoiFinal });
+
+        const textoLimpo = rawValue.trim().toLowerCase();
+        const ehMarcaDeEliminacao = textoLimpo === "sat" || textoLimpo === "erro";
+
+        const novoBoiFinal = parseTempoInput(rawValue);
+        const duplaRecalculada = recalcularParcialEMedia({ ...dupla, boiFinal: novoBoiFinal });
+        return ehMarcaDeEliminacao ? { ...duplaRecalculada, eliminada: true } : duplaRecalculada;
       });
 
+      ecosPendentesRef.current += 1;
       onDuplasChange?.(atualizado);
       return atualizado;
     });
   }
 
+  /** Valor mostrado no input: se foi marcado como eliminação ("sat"/"erro"), trava nesse texto
+   * (maiúsculo); senão prioriza o texto bruto digitado; cai pro valor formatado quando ainda não
+   * foi mexido. */
   function tempoInputValue(duplaIndex: number, tempoIndex: number, tempo: number | null) {
     const raw = rawInputs[`tempo-${duplaIndex}-${tempoIndex}`];
-    if (raw !== undefined) return raw;
+    if (raw !== undefined) {
+      const textoLimpo = raw.trim().toLowerCase();
+      if (textoLimpo === "sat" || textoLimpo === "erro") return textoLimpo.toUpperCase();
+      return raw;
+    }
     return tempo !== null ? tempo.toString().replace(".", ",") : "";
   }
 
-  function boiFinalInputValue(duplaIndex: number, boiFinal: number) {
+  /** Mesma lógica de tempoInputValue: trava em "SAT"/"ERRO" se foi essa a marca de eliminação */
+  function boiFinalInputValue(duplaIndex: number, boiFinal: number | null) {
     const raw = rawInputs[`boiFinal-${duplaIndex}`];
-    if (raw !== undefined) return raw;
-    return boiFinal.toString().replace(".", ",");
+    if (raw !== undefined) {
+      const textoLimpo = raw.trim().toLowerCase();
+      if (textoLimpo === "sat" || textoLimpo === "erro") return textoLimpo.toUpperCase();
+      return raw;
+    }
+    return boiFinal !== null ? boiFinal.toString().replace(".", ",") : "";
   }
+
+  // Ordenação por Parcial ou Média — só reordena a EXIBIÇÃO (uma lista de índices), sem tocar
+  // no array `duplas` de verdade, já que os handlers de edição/exclusão dependem do índice
+  // original pra saber qual dupla foi mexida.
+  const [ordenacao, setOrdenacao] = useState<{ campo: "parcial" | "media"; direcao: "asc" | "desc" } | null>(
+    null
+  );
+
+  function handleOrdenar(campo: "parcial" | "media") {
+    setOrdenacao((prev) => {
+      if (!prev || prev.campo !== campo) return { campo, direcao: "asc" };
+      return { campo, direcao: prev.direcao === "asc" ? "desc" : "asc" };
+    });
+  }
+
+  const indicesExibidos = useMemo(() => {
+    const indices = duplas.map((_, i) => i);
+    if (!ordenacao) return indices;
+    const sinal = ordenacao.direcao === "asc" ? 1 : -1;
+    return indices.sort((a, b) => {
+      const valorA = duplas[a][ordenacao.campo];
+      const valorB = duplas[b][ordenacao.campo];
+      if (valorA === null && valorB === null) return 0;
+      if (valorA === null) return 1; // duplas incompletas (parcial null) sempre por último
+      if (valorB === null) return -1;
+      return (valorA - valorB) * sinal;
+    });
+  }, [duplas, ordenacao]);
+
+  function IconeOrdenacao({ campo }: { campo: "parcial" | "media" }) {
+    if (ordenacao?.campo !== campo) return null;
+    return ordenacao.direcao === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />;
+  }
+
+  // Arrastar com o mouse pra rolar a tabela horizontalmente (tipo "clicar e puxar"), sem precisar
+  // mirar na barra de scroll. Só ativa se o clique começar fora de um campo editável — senão
+  // atrapalharia o clique normal em inputs/botões.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const arrastoRef = useRef<{ startX: number; scrollLeftInicial: number } | null>(null);
+  const [arrastando, setArrastando] = useState(false);
+
+  function handleMouseDownArrastar(e: React.MouseEvent<HTMLDivElement>) {
+    const alvo = e.target as HTMLElement;
+    if (alvo.closest("input, button, a, select, textarea")) return;
+    if (!scrollContainerRef.current) return;
+
+    arrastoRef.current = { startX: e.pageX, scrollLeftInicial: scrollContainerRef.current.scrollLeft };
+    setArrastando(true);
+  }
+
+  useEffect(() => {
+    if (!arrastando) return;
+
+    function handleMouseMove(e: MouseEvent) {
+      if (!arrastoRef.current || !scrollContainerRef.current) return;
+      const delta = e.pageX - arrastoRef.current.startX;
+      scrollContainerRef.current.scrollLeft = arrastoRef.current.scrollLeftInicial - delta;
+    }
+
+    function handleMouseUp() {
+      arrastoRef.current = null;
+      setArrastando(false);
+    }
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [arrastando]);
 
   return (
     <div className="min-w-0 flex-1 rounded-2xl bg-white p-5 shadow-sm">
@@ -141,30 +303,40 @@ export default function DuplasPorPezeiroTable({
       </div>
 
       {/* Tabela */}
-      <div className="overflow-x-auto">
-        <table className="border-collapse table-fixed text-sm" style={{ width: 1144 }}>
+      <div
+        ref={scrollContainerRef}
+        onMouseDown={handleMouseDownArrastar}
+        className={`overflow-x-auto ${arrastando ? "cursor-grabbing select-none" : "cursor-grab"}`}
+      >
+        <table className="border-collapse table-fixed text-sm" style={{ width: 1294 }}>
+          {/* Larguras: # / Status / Inscrição / Cabeceiro / HC Cabeceiro / HC Dupla / Bois / 1º-6º Boi / Parcial / Boi Final / Média / Para Ganhar / Ações */}
           <colgroup>
-            <col style={{ width: 40 }} /> {/* # */}
-            <col style={{ width: 64 }} /> {/* Inscrição */}
-            <col style={{ width: 160 }} /> {/* Cabeceiro */}
-            <col style={{ width: 70 }} /> {/* HC Cabeceiro */}
-            <col style={{ width: 70 }} /> {/* HC Dupla */}
-            <col style={{ width: 56 }} /> {/* Bois */}
-            <col style={{ width: 64 }} /> {/* 1º Boi */}
-            <col style={{ width: 64 }} /> {/* 2º Boi */}
-            <col style={{ width: 64 }} /> {/* 3º Boi */}
-            <col style={{ width: 64 }} /> {/* 4º Boi */}
-            <col style={{ width: 64 }} /> {/* 5º Boi */}
-            <col style={{ width: 64 }} /> {/* 6º Boi */}
-            <col style={{ width: 70 }} /> {/* Parcial */}
-            <col style={{ width: 70 }} /> {/* Boi Final */}
-            <col style={{ width: 70 }} /> {/* Média */}
-            <col style={{ width: 90 }} /> {/* Para Ganhar */}
+            <col style={{ width: 40 }} />
+            <col style={{ width: 100 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 160 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 56 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 90 }} />
+            <col style={{ width: 50 }} />
           </colgroup>
           <thead>
             <tr>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 #
+              </th>
+              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+                <span className="sr-only">Status</span>
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 Inscrição
@@ -185,16 +357,33 @@ export default function DuplasPorPezeiroTable({
                 Tempo de Cada Boi (seg.)
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
-                Parcial
+                <button
+                  type="button"
+                  onClick={() => handleOrdenar("parcial")}
+                  className="flex items-center gap-1 transition-colors hover:text-slate-700"
+                >
+                  Parcial
+                  <IconeOrdenacao campo="parcial" />
+                </button>
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 Boi Final
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
-                Média
+                <button
+                  type="button"
+                  onClick={() => handleOrdenar("media")}
+                  className="flex items-center gap-1 transition-colors hover:text-slate-700"
+                >
+                  Média
+                  <IconeOrdenacao campo="media" />
+                </button>
               </th>
               <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
                 Para Ganhar
+              </th>
+              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+                <span className="sr-only">Ações</span>
               </th>
             </tr>
             <tr>
@@ -209,10 +398,29 @@ export default function DuplasPorPezeiroTable({
             </tr>
           </thead>
           <tbody>
-            {duplas.map((dupla, duplaIndex) => (
-              <tr key={dupla.numero} className="border-b border-slate-50 last:border-0">
+            {indicesExibidos.map((duplaIndex) => {
+              const dupla = duplas[duplaIndex];
+              return (
+              <tr
+                key={dupla.numero}
+                className={`border-b border-slate-50 last:border-0 ${dupla.eliminada ? "bg-red-50/60" : ""}`}
+              >
                 <td className="px-2 py-3 text-slate-400">
                   {String(dupla.numero).padStart(2, "0")}
+                </td>
+                <td className="px-2 py-3">
+                  {dupla.eliminada && (
+                    <button
+                      type="button"
+                      onClick={() => handleSolicitarDesmarcarEliminada(duplaIndex)}
+                      aria-label="Dupla eliminada — clique para desfazer"
+                      title="Dupla eliminada — clique para desfazer"
+                      className="flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-600 transition-colors hover:bg-red-200"
+                    >
+                      <Ban size={10} />
+                      ELIMINADA
+                    </button>
+                  )}
                 </td>
                 <td className="px-2 py-3 font-semibold text-slate-700">
                   {dupla.inscricao}
@@ -223,6 +431,15 @@ export default function DuplasPorPezeiroTable({
                     <span className="font-semibold text-slate-900">
                       {dupla.cabeceiroNome}
                     </span>
+                    {dupla.sorteada && (
+                      <span
+                        aria-label="Dupla formada por sorteio"
+                        title="Dupla formada por sorteio"
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600"
+                      >
+                        <Dices size={12} />
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="px-2 py-3">
@@ -237,9 +454,9 @@ export default function DuplasPorPezeiroTable({
                 </td>
                 <td className="px-2 py-3 text-slate-700">{dupla.bois}</td>
 
-                {/* Tempos editáveis — só habilitados até a quantidade de bois da dupla */}
+                {/* Tempos editáveis — só habilitados até a quantidade de bois da dupla, e nunca se a dupla estiver eliminada */}
                 {dupla.tempos.map((tempo, tempoIndex) => {
-                  const habilitado = tempoIndex < dupla.bois;
+                  const habilitado = tempoIndex < dupla.bois && !dupla.eliminada;
                   return (
                     <td key={tempoIndex} className="box-border px-1 py-2 text-center">
                       <input
@@ -252,7 +469,7 @@ export default function DuplasPorPezeiroTable({
                         onChange={(e) => handleTempoChange(duplaIndex, tempoIndex, e.target.value)}
                         className={`box-border w-full rounded-md border border-transparent bg-transparent px-1.5 py-1 text-center outline-none transition-colors placeholder:text-slate-300 ${
                           habilitado
-                            ? "hover:bg-slate-50 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                            ? "cursor-text hover:bg-slate-50 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
                             : "cursor-not-allowed opacity-40"
                         } ${
                           tempoIndex === 1 && tempo !== null
@@ -268,15 +485,16 @@ export default function DuplasPorPezeiroTable({
                   {formatTempo(dupla.parcial)}
                 </td>
 
-                {/* Boi Final — editável */}
+                {/* Boi Final — editável, exceto se a dupla estiver eliminada */}
                 <td className="box-border px-1 py-2">
                   <input
                     type="text"
                     inputMode="decimal"
                     value={boiFinalInputValue(duplaIndex, dupla.boiFinal)}
+                    disabled={dupla.eliminada}
                     aria-label={`Boi Final — ${dupla.cabeceiroNome}`}
                     onChange={(e) => handleBoiFinalChange(duplaIndex, e.target.value)}
-                    className="box-border w-full rounded-md border border-transparent bg-green-50 px-1.5 py-1 text-center font-semibold text-green-600 outline-none transition-colors hover:bg-green-100 focus:border-green-300 focus:bg-white focus:ring-2 focus:ring-green-100"
+                    className="box-border w-full rounded-md border border-transparent bg-green-50 px-1.5 py-1 text-center font-semibold text-green-600 outline-none transition-colors cursor-text hover:bg-green-100 focus:border-green-300 focus:bg-white focus:ring-2 focus:ring-green-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-green-50"
                   />
                 </td>
 
@@ -288,11 +506,31 @@ export default function DuplasPorPezeiroTable({
                     {formatTempo(dupla.paraGanhar)}
                   </span>
                 </td>
+                <td className="px-2 py-3 text-center">
+                  <button
+                    type="button"
+                    onClick={() => onDeletar?.(duplaIndex)}
+                    aria-label={`Excluir dupla — ${dupla.cabeceiroNome}`}
+                    className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
+
+      <ConfirmDialog
+        open={duplaParaDesmarcar !== null}
+        title="Desfazer eliminação dessa dupla?"
+        description="Os campos voltam a ficar editáveis normalmente."
+        confirmLabel="Desfazer"
+        onConfirm={handleConfirmarDesmarcarEliminada}
+        onCancel={() => setDuplaParaDesmarcar(null)}
+      />
     </div>
   );
 }

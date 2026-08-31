@@ -85,7 +85,7 @@ export default function PezeiroForm({ onAdd }: PezeiroFormProps) {
 
         <button
           type="submit"
-          className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700"
+          className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-700"
         >
           <UserPlus size={16} />
           Cadastrar

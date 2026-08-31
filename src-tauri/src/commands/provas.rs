@@ -4,12 +4,14 @@ use rusqlite::params;
 use tauri::State;
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn criar_prova(
     nome: String,
     data: String,
     bateria: bool,
     bateria_nu: Option<i64>,
     categoria: String,
+    limite_inscricao: Option<i64>,
     db: State<DbConnection>,
 ) -> Result<Prova, String> {
     if nome.trim().is_empty() {
@@ -21,12 +23,18 @@ pub fn criar_prova(
     if categoria != "Aberta" && categoria != "Soma" {
         return Err("Categoria deve ser \"Aberta\" ou \"Soma\".".into());
     }
+    if let Some(limite) = limite_inscricao {
+        if limite < 1 {
+            return Err("O limite de inscrições precisa ser maior que zero.".into());
+        }
+    }
 
     let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     conn.execute(
-        "INSERT INTO provas (nome, data, bateria, bateria_nu, categoria) VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![nome, data, bateria as i64, bateria_nu, categoria],
+        "INSERT INTO provas (nome, data, bateria, bateria_nu, categoria, limite_inscricao)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![nome, data, bateria as i64, bateria_nu, categoria, limite_inscricao],
     )
     .map_err(|e| e.to_string())?;
 
@@ -39,6 +47,7 @@ pub fn criar_prova(
         bateria,
         bateria_nu,
         categoria,
+        limite_inscricao,
     })
 }
 
@@ -47,7 +56,7 @@ pub fn buscar_prova(id: i64, db: State<DbConnection>) -> Result<Prova, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     conn.query_row(
-        "SELECT id, nome, data, bateria, bateria_nu, categoria FROM provas WHERE id = ?1",
+        "SELECT id, nome, data, bateria, bateria_nu, categoria, limite_inscricao FROM provas WHERE id = ?1",
         params![id],
         |row| {
             Ok(Prova {
@@ -57,6 +66,7 @@ pub fn buscar_prova(id: i64, db: State<DbConnection>) -> Result<Prova, String> {
                 bateria: row.get::<_, i64>(3)? != 0,
                 bateria_nu: row.get(4)?,
                 categoria: row.get(5)?,
+                limite_inscricao: row.get(6)?,
             })
         },
     )
@@ -68,7 +78,10 @@ pub fn listar_provas(db: State<DbConnection>) -> Result<Vec<Prova>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     let mut stmt = conn
-        .prepare("SELECT id, nome, data, bateria, bateria_nu, categoria FROM provas ORDER BY data DESC")
+        .prepare(
+            "SELECT id, nome, data, bateria, bateria_nu, categoria, limite_inscricao
+             FROM provas ORDER BY data DESC",
+        )
         .map_err(|e| e.to_string())?;
 
     let provas = stmt
@@ -80,6 +93,7 @@ pub fn listar_provas(db: State<DbConnection>) -> Result<Vec<Prova>, String> {
                 bateria: row.get::<_, i64>(3)? != 0,
                 bateria_nu: row.get(4)?,
                 categoria: row.get(5)?,
+                limite_inscricao: row.get(6)?,
             })
         })
         .map_err(|e| e.to_string())?

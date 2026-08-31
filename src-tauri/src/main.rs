@@ -10,6 +10,8 @@ use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             let app_handle = app.handle();
             let conn = db::init_db(app_handle)?;
@@ -22,11 +24,23 @@ fn main() {
             commands::provas::buscar_prova,
             commands::provas::deletar_prova,
             commands::cabeceiros::criar_cabeceiro,
+            commands::cabeceiros::adicionar_cabeceiro_a_prova,
             commands::cabeceiros::listar_cabeceiros_por_prova,
+            commands::cabeceiros::atualizar_baterias_cabeceiro,
             commands::cabeceiros::deletar_cabeceiro,
             commands::pezeiros::criar_pezeiro,
+            commands::pezeiros::adicionar_pezeiro_a_prova,
             commands::pezeiros::listar_pezeiros_por_prova,
+            commands::pezeiros::atualizar_baterias_pezeiro,
             commands::pezeiros::deletar_pezeiro,
+            commands::banco_cabeceiros::listar_banco_cabeceiros,
+            commands::banco_cabeceiros::criar_banco_cabeceiro,
+            commands::banco_cabeceiros::atualizar_banco_cabeceiro,
+            commands::banco_cabeceiros::deletar_banco_cabeceiro,
+            commands::banco_pezeiros::listar_banco_pezeiros,
+            commands::banco_pezeiros::criar_banco_pezeiro,
+            commands::banco_pezeiros::atualizar_banco_pezeiro,
+            commands::banco_pezeiros::deletar_banco_pezeiro,
             commands::duplas::criar_dupla,
             commands::duplas::listar_duplas_por_cabeceiro,
             commands::duplas::listar_duplas_por_pezeiro,
