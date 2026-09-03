@@ -3,7 +3,13 @@ import { ArrowDown, ArrowUp, Ban, Dices, Trash2 } from "lucide-react";
 import Avatar from "../ui/avatar";
 import LiveBadge from "../ui/live-badge";
 import ConfirmDialog from "../ui/confirm-dialog";
-import { MEDIA_INCOMPLETA } from "../../lib/para-ganhar";
+import {
+  MEDIA_INCOMPLETA,
+  calcularMenorMedia,
+  calcularSomaTempos,
+  calcularParaGanhar,
+  nenhumTempoLancado,
+} from "../../lib/para-ganhar";
 
 export interface DuplaResultadoRow {
   numero: number;
@@ -31,7 +37,8 @@ export interface DuplaResultadoRow {
   /** Calculado automaticamente. Vale 120 (valor "castigo" da planilha original) quando a
    * dupla está incompleta (1º tempo vazio/0, ou Boi Final ainda não lançado). */
   media: number;
-  /** Ainda estático — depende da comparação com as outras duplas (regra de ranking não definida) */
+  /** Calculado automaticamente — recalculado pra TODAS as duplas sempre que qualquer uma
+   * delas muda, já que depende da menor média entre todas (o líder da prova). */
   paraGanhar: number;
 }
 
@@ -90,6 +97,31 @@ function recalcularParcialEMedia(dupla: DuplaResultadoRow): DuplaResultadoRow {
   return { ...dupla, parcial, media };
 }
 
+/**
+ * Recalcula o "Para Ganhar" de TODAS as duplas da lista, replicando a fórmula da planilha:
+ *   paraGanhar = (bois + 1) * (menorMedia - 0,01) - somaTempos
+ *
+ * Precisa rodar sobre a lista inteira (não só a dupla que mudou) porque `menorMedia`
+ * representa a média do líder da prova — editar o tempo de UMA dupla pode mudar quem
+ * lidera, o que muda o "Para Ganhar" de TODAS as outras.
+ */
+function recalcularParaGanharDeTodas(lista: DuplaResultadoRow[]): DuplaResultadoRow[] {
+  const menorMedia = calcularMenorMedia(
+    lista.map((d) => ({ bois: d.bois, media: d.media, eliminada: d.eliminada }))
+  );
+
+  return lista.map((dupla) => {
+    // Dupla que ainda não correu nenhum boi mostra "0" em vez de um alvo calculado —
+    // evita exibir um número grande e confuso antes da dupla sequer começar a competir.
+    if (nenhumTempoLancado(dupla.tempos, dupla.bois)) {
+      return { ...dupla, paraGanhar: 0 };
+    }
+    const somaTempos = calcularSomaTempos(dupla.tempos, dupla.bois);
+    const paraGanhar = calcularParaGanhar(dupla.bois, somaTempos, menorMedia);
+    return { ...dupla, paraGanhar };
+  });
+}
+
 export default function DuplasResultadosTable({
   duplas: duplasIniciais,
   aoVivo = true,
@@ -139,9 +171,10 @@ export default function DuplasResultadosTable({
         return ehMarcaDeEliminacao ? { ...duplaRecalculada, eliminada: true } : duplaRecalculada;
       });
 
+      const comParaGanharAtualizado = recalcularParaGanharDeTodas(atualizado);
       ecosPendentesRef.current += 1;
-      onDuplasChange?.(atualizado);
-      return atualizado;
+      onDuplasChange?.(comParaGanharAtualizado);
+      return comParaGanharAtualizado;
     });
   }
 
@@ -149,11 +182,14 @@ export default function DuplasResultadosTable({
   function handleToggleEliminada(duplaIndex: number) {
     setDuplas((prev) => {
       const atualizado = prev.map((dupla, i) =>
-        i === duplaIndex ? { ...dupla, eliminada: !dupla.eliminada } : dupla
+        i === duplaIndex
+          ? recalcularParcialEMedia({ ...dupla, eliminada: !dupla.eliminada })
+          : dupla
       );
+      const comParaGanharAtualizado = recalcularParaGanharDeTodas(atualizado);
       ecosPendentesRef.current += 1;
-      onDuplasChange?.(atualizado);
-      return atualizado;
+      onDuplasChange?.(comParaGanharAtualizado);
+      return comParaGanharAtualizado;
     });
   }
 
@@ -186,9 +222,10 @@ export default function DuplasResultadosTable({
         return ehMarcaDeEliminacao ? { ...duplaRecalculada, eliminada: true } : duplaRecalculada;
       });
 
+      const comParaGanharAtualizado = recalcularParaGanharDeTodas(atualizado);
       ecosPendentesRef.current += 1;
-      onDuplasChange?.(atualizado);
-      return atualizado;
+      onDuplasChange?.(comParaGanharAtualizado);
+      return comParaGanharAtualizado;
     });
   }
 
@@ -338,67 +375,67 @@ export default function DuplasResultadosTable({
         onMouseDown={handleMouseDownArrastar}
         className={`overflow-x-auto ${arrastando ? "cursor-grabbing select-none" : "cursor-grab"}`}
       >
-        <table className="border-collapse table-fixed text-sm" style={{ width: 1384 }}>
-          {/* Larguras: # / Status / Bateria / Inscrição / Cabeceiro / HC Cabeceiro / Pezeiro / HC Pez. / HC Dupla / Bois / 1º-6º Boi / Parcial / Boi Final / Média / Para Ganhar / Ações */}
+        <table className="w-full border-collapse table-fixed text-xs">
+          {/* Larguras em %: # / Status / Bateria / Inscrição / Cabeceiro / HC Cabeceiro / Pezeiro / HC Pez. / HC Dupla / Bois / 1º-6º Boi / Parcial / Boi Final / Média / Para Ganhar / Ações — soma = 100% */}
           <colgroup>
-            <col style={{ width: 40 }} />
-            <col style={{ width: 100 }} />
-            <col style={{ width: 70 }} />
-            <col style={{ width: 64 }} />
-            <col style={{ width: 140 }} />
-            <col style={{ width: 80 }} />
-            <col style={{ width: 140 }} />
-            <col style={{ width: 70 }} />
-            <col style={{ width: 70 }} />
-            <col style={{ width: 56 }} />
-            <col style={{ width: 64 }} />
-            <col style={{ width: 64 }} />
-            <col style={{ width: 64 }} />
-            <col style={{ width: 64 }} />
-            <col style={{ width: 64 }} />
-            <col style={{ width: 64 }} />
-            <col style={{ width: 70 }} />
-            <col style={{ width: 70 }} />
-            <col style={{ width: 70 }} />
-            <col style={{ width: 90 }} />
-            <col style={{ width: 50 }} />
+            <col style={{ width: "2.5%" }} />
+            <col style={{ width: "6%" }} />
+            <col style={{ width: "4.5%" }} />
+            <col style={{ width: "4.5%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "5%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "4.5%" }} />
+            <col style={{ width: "4.5%" }} />
+            <col style={{ width: "3%" }} />
+            <col style={{ width: "4%" }} />
+            <col style={{ width: "4%" }} />
+            <col style={{ width: "4%" }} />
+            <col style={{ width: "4%" }} />
+            <col style={{ width: "4%" }} />
+            <col style={{ width: "4%" }} />
+            <col style={{ width: "5%" }} />
+            <col style={{ width: "5%" }} />
+            <col style={{ width: "5%" }} />
+            <col style={{ width: "5.5%" }} />
+            <col style={{ width: "3%" }} />
           </colgroup>
           <thead>
             <tr>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+              <th rowSpan={2} className="border-b border-slate-100 px-1.5 py-1.5 text-left text-[10px] font-semibold text-slate-500">
                 #
               </th>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+              <th rowSpan={2} className="border-b border-slate-100 px-1.5 py-1.5 text-left text-[10px] font-semibold text-slate-500">
                 <span className="sr-only">Status</span>
               </th>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+              <th rowSpan={2} className="border-b border-slate-100 px-1.5 py-1.5 text-left text-[10px] font-semibold text-slate-500">
                 Bateria
               </th>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+              <th rowSpan={2} className="border-b border-slate-100 px-1.5 py-1.5 text-left text-[10px] font-semibold text-slate-500">
                 Inscrição
               </th>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+              <th rowSpan={2} className="border-b border-slate-100 px-1.5 py-1.5 text-left text-[10px] font-semibold text-slate-500">
                 Cabeceiro
               </th>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+              <th rowSpan={2} className="border-b border-slate-100 px-1.5 py-1.5 text-left text-[10px] font-semibold text-slate-500">
                 HC Cabeceiro
               </th>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+              <th rowSpan={2} className="border-b border-slate-100 px-1.5 py-1.5 text-left text-[10px] font-semibold text-slate-500">
                 Pezeiro
               </th>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+              <th rowSpan={2} className="border-b border-slate-100 px-1.5 py-1.5 text-left text-[10px] font-semibold text-slate-500">
                 HC Pez.
               </th>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+              <th rowSpan={2} className="border-b border-slate-100 px-1.5 py-1.5 text-left text-[10px] font-semibold text-slate-500">
                 HC Dupla
               </th>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+              <th rowSpan={2} className="border-b border-slate-100 px-1.5 py-1.5 text-left text-[10px] font-semibold text-slate-500">
                 Bois
               </th>
-              <th colSpan={6} className="border-b border-slate-100 bg-slate-50 px-2 py-1.5 text-center text-xs font-semibold text-slate-500">
+              <th colSpan={6} className="border-b border-slate-100 bg-slate-50 px-1 py-1.5 text-center text-[10px] font-semibold text-slate-500">
                 Tempo de Cada Boi (seg.)
               </th>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+              <th rowSpan={2} className="border-b border-slate-100 px-1.5 py-1.5 text-left text-[10px] font-semibold text-slate-500">
                 <button
                   type="button"
                   onClick={() => handleOrdenar("parcial")}
@@ -408,10 +445,10 @@ export default function DuplasResultadosTable({
                   <IconeOrdenacao campo="parcial" />
                 </button>
               </th>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+              <th rowSpan={2} className="border-b border-slate-100 px-1.5 py-1.5 text-left text-[10px] font-semibold text-slate-500">
                 Boi Final
               </th>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+              <th rowSpan={2} className="border-b border-slate-100 px-1.5 py-1.5 text-left text-[10px] font-semibold text-slate-500">
                 <button
                   type="button"
                   onClick={() => handleOrdenar("media")}
@@ -421,10 +458,10 @@ export default function DuplasResultadosTable({
                   <IconeOrdenacao campo="media" />
                 </button>
               </th>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+              <th rowSpan={2} className="border-b border-slate-100 px-1.5 py-1.5 text-left text-[10px] font-semibold text-slate-500">
                 Para Ganhar
               </th>
-              <th rowSpan={2} className="border-b border-slate-100 px-2 py-2 text-left text-xs font-semibold text-slate-500">
+              <th rowSpan={2} className="border-b border-slate-100 px-1.5 py-1.5 text-left text-[10px] font-semibold text-slate-500">
                 <span className="sr-only">Ações</span>
               </th>
             </tr>
@@ -432,7 +469,7 @@ export default function DuplasResultadosTable({
               {["1º Boi", "2º Boi", "3º Boi", "4º Boi", "5º Boi", "6º Boi"].map((label) => (
                 <th
                   key={label}
-                  className="border-b border-slate-100 bg-slate-50 px-2 py-1.5 text-center text-xs font-medium text-slate-400"
+                  className="border-b border-slate-100 bg-slate-50 px-1 py-1 text-center text-[10px] font-medium text-slate-400"
                 >
                   {label}
                 </th>
@@ -447,33 +484,33 @@ export default function DuplasResultadosTable({
                 key={dupla.numero}
                 className={`border-b border-slate-50 last:border-0 ${dupla.eliminada ? "bg-red-50/60" : ""}`}
               >
-                <td className="px-2 py-3 text-slate-400">
+                <td className="px-1.5 py-2 text-slate-400">
                   {String(dupla.numero).padStart(2, "0")}
                 </td>
-                <td className="px-2 py-3">
+                <td className="px-1.5 py-2">
                   {dupla.eliminada && (
                     <button
                       type="button"
                       onClick={() => handleSolicitarDesmarcarEliminada(duplaIndex)}
                       aria-label="Dupla eliminada — clique para desfazer"
                       title="Dupla eliminada — clique para desfazer"
-                      className="flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-600 transition-colors hover:bg-red-200"
+                      className="flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-bold text-red-600 transition-colors hover:bg-red-200"
                     >
                       <Ban size={10} />
                       ELIMINADA
                     </button>
                   )}
                 </td>
-                <td className="px-2 py-3">
+                <td className="px-1.5 py-2">
                   {dupla.numeroBateria !== null ? (
-                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
                       {dupla.numeroBateria}
                     </span>
                   ) : (
                     <span className="text-xs text-slate-300">–</span>
                   )}
                 </td>
-                <td className="box-border px-1 py-2">
+                <td className="box-border px-1 py-1.5">
                   <input
                     type="text"
                     inputMode="numeric"
@@ -488,15 +525,15 @@ export default function DuplasResultadosTable({
                     className="box-border w-full rounded-md border border-transparent bg-transparent px-1.5 py-1 text-center font-semibold text-slate-700 outline-none transition-colors cursor-text hover:bg-slate-50 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                   />
                 </td>
-                <td className="px-2 py-3">
+                <td className="px-1.5 py-2">
                   <span className="font-semibold text-blue-600">{dupla.cabeceiroNome}</span>
                 </td>
-                <td className="px-2 py-3">
-                  <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600">
+                <td className="px-1.5 py-2">
+                  <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600">
                     {dupla.hcCabeceiro.toFixed(1).replace(".", ",")}
                   </span>
                 </td>
-                <td className="px-2 py-3">
+                <td className="px-1.5 py-2">
                   <div className="flex items-center gap-2">
                     <Avatar initials={dupla.pezeiroIniciais} />
                     <span className="font-semibold text-slate-900">
@@ -513,23 +550,23 @@ export default function DuplasResultadosTable({
                     )}
                   </div>
                 </td>
-                <td className="px-2 py-3">
-                  <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600">
+                <td className="px-1.5 py-2">
+                  <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600">
                     {dupla.hcPez.toFixed(1).replace(".", ",")}
                   </span>
                 </td>
-                <td className="px-2 py-3">
-                  <span className="rounded-md bg-purple-50 px-2 py-0.5 text-xs font-semibold text-purple-600">
+                <td className="px-1.5 py-2">
+                  <span className="rounded-md bg-purple-50 px-1.5 py-0.5 text-[10px] font-semibold text-purple-600">
                     {dupla.hcDupla.toFixed(1).replace(".", ",")}
                   </span>
                 </td>
-                <td className="px-2 py-3 text-slate-700">{dupla.bois}</td>
+                <td className="px-1.5 py-2 text-slate-700">{dupla.bois}</td>
 
                 {/* Tempos editáveis — só habilitados até a quantidade de bois da dupla, e nunca se a dupla estiver eliminada */}
                 {dupla.tempos.map((tempo, tempoIndex) => {
                   const habilitado = tempoIndex < dupla.bois && !dupla.eliminada;
                   return (
-                    <td key={tempoIndex} className="box-border px-1 py-2 text-center">
+                    <td key={tempoIndex} className="box-border px-0.5 py-1.5 text-center">
                       <input
                         type="text"
                         inputMode="decimal"
@@ -552,12 +589,12 @@ export default function DuplasResultadosTable({
                   );
                 })}
 
-                <td className="px-2 py-3 text-slate-700">
+                <td className="px-1.5 py-2 text-slate-700">
                   {formatTempo(dupla.parcial)}
                 </td>
 
                 {/* Boi Final — editável, independente dos tempos, exceto se a dupla estiver eliminada */}
-                <td className="box-border px-1 py-2">
+                <td className="box-border px-1 py-1.5">
                   <input
                     type="text"
                     inputMode="decimal"
@@ -569,15 +606,15 @@ export default function DuplasResultadosTable({
                   />
                 </td>
 
-                <td className="px-2 py-3 text-slate-700">
+                <td className="px-1.5 py-2 text-slate-700">
                   {formatTempo(dupla.media)}
                 </td>
-                <td className="px-2 py-3">
-                  <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                <td className="px-1.5 py-2">
+                  <span className="rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-700">
                     {formatTempo(dupla.paraGanhar)}
                   </span>
                 </td>
-                <td className="px-2 py-3 text-center">
+                <td className="px-1.5 py-2 text-center">
                   <button
                     type="button"
                     onClick={() => onDeletar?.(duplaIndex)}
